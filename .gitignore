@@ -1,0 +1,8 @@
+.idea
+.venv
+bronze/*.csv
+silver/*.csv
+gold/*.csv
+note mqtt.md
+__marimo__
+.obsidian
