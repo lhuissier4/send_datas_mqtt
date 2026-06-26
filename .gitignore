@@ -1,5 +1,6 @@
 .idea
 .venv
+.env
 datas/bronze/*.csv
 datas/silver/*.csv
 datas/gold/*.csv
@@ -8,4 +9,7 @@ datas/gold/*.jsonl
 note mqtt.md
 __marimo__
 .obsidian
+mosquitto/data
+mosquitto/log
+timescaledb/data
 **/__pycache__/*
