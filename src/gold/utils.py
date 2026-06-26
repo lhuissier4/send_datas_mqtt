@@ -5,17 +5,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 
 
-class Sensor:
-    def __init__(self, timestamp: str, id_machine: str, others_data: dict[str, Any]):
-        self.timestamp:str = timestamp
-        self.id_machine:str = id_machine
-        self.others_data:dict[str, Any] = others_data
-    def get_data(self) -> dict[str, Any]:
-        return {
-            "timestamp": self.timestamp,
-            "id_machine": self.id_machine,
-            **self.others_data
-        }
 
 
 def get_dynamic_max_workers(group_count: int) -> int:
@@ -38,89 +27,88 @@ def verify_all_line_have_same_timestamp(df: pd.DataFrame)->None:
         raise ValueError("All lines must have the same timestamp")
 
 
-def create_list_of_list_of_sensor(df: pd.DataFrame, columns: list[str])-> list[Sensor]:
+SENSOR_COLUMNS = [
+    "iot_vitesse_rotation", "iot_courant_moteur", "iot_pression_hydraulique",
+    "iot_temperature", "iot_vibration_peak", "iot_charge_moteur",
+]
+
+PLC_COLUMNS = [
+    "id_type_metal", "id_status_production",
+]
+
+
+def _records_by_timestamp(df: pd.DataFrame, value_columns: list[str]) -> pd.Series:
     """
+    Transforme un DataFrame en une série indexée par timestamp, dont chaque
+    valeur est la liste des records (un dict {timestamp, id_machine, <col>: <val>}
+    par valeur de `value_columns`) partageant ce timestamp.
 
-    :param df: DataFrame ou toutes les lignes ont le meme timestamp
-    :param columns: colonnes du DataFrame
-    :return: liste de liste de capteurs : tous seront à envoyer simultanément au broker MQTT
+    :param df: DataFrame source (colonnes timestamp, machine_id, *value_columns)
+    :param value_columns: colonnes à "melter" en un record chacune
     """
-    verify_columns(df,columns)
-    verify_all_line_have_same_timestamp(df)
-    list_of_machines_sensors:list[Sensor] = []
-    for line in df.itertuples(): # iteration sur chaque ligne (une ligne par machine)
-        list_of_machines_sensors.append(
-            Sensor(
-                timestamp=line.timestamp,
-                id_machine=line.machine_id,
-                others_data={"iot_vitesse_rotation": line.iot_vitesse_rotation}
-            )
-        )
-        list_of_machines_sensors.append(
-            Sensor(
-                timestamp=line.timestamp,
-                id_machine=line.machine_id,
-                others_data={"iot_courant_moteur": line.iot_vitesse_rotation}
-            )
-        )
-        list_of_machines_sensors.append(
-            Sensor(
-                timestamp=line.timestamp,
-                id_machine=line.machine_id,
-                others_data={"iot_pression_hydraulique": line.iot_vitesse_rotation}
-            )
-        )
-        list_of_machines_sensors.append(
-            Sensor(
-                timestamp=line.timestamp,
-                id_machine=line.machine_id,
-                others_data={"iot_temperature": line.iot_vitesse_rotation}
-            )
-        )
-        list_of_machines_sensors.append(
-            Sensor(
-                timestamp=line.timestamp,
-                id_machine=line.machine_id,
-                others_data={"iot_vibration_peak": line.iot_vitesse_rotation}
-            )
-        )
-        list_of_machines_sensors.append(
-            Sensor(
-                timestamp=line.timestamp,
-                id_machine=line.machine_id,
-                others_data={"iot_charge_moteur": line.iot_vitesse_rotation}
-            )
-        )
+    verify_columns(df, ["timestamp", "machine_id", *value_columns])
 
-    return list_of_machines_sensors
+    # 1 ligne machine -> 1 ligne par valeur, en une passe vectorisée
+    long = df.melt(
+        id_vars=["timestamp", "machine_id"],
+        value_vars=value_columns,
+        var_name="field",
+        value_name="value",
+    )
 
-def record_future_send_in_json(df: pd.DataFrame, output_dir: str = "../datas/gold")->list[list[Sensor]]:
-    columns = ["timestamp", "machine_id", "iot_vitesse_rotation", "iot_courant_moteur", "iot_pression_hydraulique", "iot_temperature", "iot_vibration_peak", "iot_charge_moteur"]
-    verify_columns(df,columns)
-    results:list[list[Sensor]] = []
-    for index, (group_value, group_df) in enumerate(df.groupby("timestamp")):
-        record_list_of_sensor_to_json(
-            list_of_sensor=create_list_of_list_of_sensor(
-                df=group_df,
-                columns=columns
-            ),
-            output_dir=output_dir,
-            index=index+1
-        )
+    # pas de record pour une valeur NA
+    long = long.dropna(subset=["value"])
 
-    return results
+    # un dict par enregistrement (chaque valeur garde sa propre clé)
+    long["record"] = [
+        {"timestamp": t, "id_machine": m, field: v}
+        for t, m, field, v in zip(long["timestamp"], long["machine_id"], long["field"], long["value"])
+    ]
 
-def record_list_of_sensor_to_json(list_of_sensor: list[Sensor], index:int, output_dir: str = "../datas/gold")->None:
+    # regroupe par timestamp -> une liste de records par tick
+    return long.groupby("timestamp", sort=True)["record"].apply(list)
+
+
+def record_future_send_in_jsonl(
+    df_iot: pd.DataFrame,
+    df_plc: pd.DataFrame | None = None,
+    output_path: str = "../datas/gold/mqtt_send.jsonl",
+) -> None:
     """
-    Crée un fichier JSON par liste de capteurs et l'enregistre dans output_dir.
-    Les fichiers sont numérotés à partir de 1 : 1.json, 2.json, ...
+    Enregistre les données à envoyer dans UN seul fichier JSONL.
+    Chaque ligne = la liste des records (IoT + PLC) partageant le même
+    timestamp (= un "tick" à envoyer simultanément au broker MQTT).
 
-    :param index:
-    :param list_of_sensor: liste de listes de capteurs
-    :param output_dir: dossier de destination des fichiers JSON
+    Les lignes PLC ayant le même timestamp qu'un tick IoT sont ajoutées dans
+    le même tableau ; un timestamp présent uniquement côté PLC produit une
+    ligne contenant seulement ses records PLC.
+
+    Approche vectorisée + écriture séquentielle unique : très rapide même
+    sur des millions de lignes / centaines de milliers de timestamps.
+
+    :param df_iot: DataFrame IoT (colonnes timestamp, machine_id, iot_*)
+    :param df_plc: DataFrame PLC optionnel (colonnes timestamp, machine_id, id_*)
+    :param output_path: chemin du fichier .jsonl de sortie
     """
-    os.makedirs(output_dir, exist_ok=True)
-    file_path = os.path.join(output_dir, f"{index}.json")
-    data = [sensor.get_data() for sensor in list_of_sensor]
-    with open(file_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
+    iot_groups = _records_by_timestamp(df_iot, SENSOR_COLUMNS)
+
+    if df_plc is not None:
+        plc_groups = _records_by_timestamp(df_plc, PLC_COLUMNS)
+    else:
+        plc_groups = pd.Series(dtype=object)
+
+    # union triée des timestamps présents côté IoT et/ou PLC
+    timestamps = sorted(set(iot_groups.index) | set(plc_groups.index))
+
+    # une seule ouverture de fichier, une ligne JSON par timestamp
+    with open(output_path, "w", encoding="utf-8") as f:
+        for ts in timestamps:
+            records = []
+            if ts in iot_groups.index:
+                records.extend(iot_groups.loc[ts])
+            if ts in plc_groups.index:
+                records.extend(plc_groups.loc[ts])
+            f.write(json.dumps(records, ensure_ascii=False))
+            f.write("\n")

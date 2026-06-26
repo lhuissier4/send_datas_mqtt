@@ -4,6 +4,7 @@ datas/bronze/*.csv
 datas/silver/*.csv
 datas/gold/*.csv
 datas/gold/*.json
+datas/gold/*.jsonl
 note mqtt.md
 __marimo__
 .obsidian

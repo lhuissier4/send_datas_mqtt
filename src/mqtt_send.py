@@ -15,4 +15,4 @@ df_plc = (
     df_plc.sort_values("timestamp")
       .reset_index(drop=True)
 )
-list_of_list_of_sensor:list[list[Sensor]] = record_future_send_in_json(df_iot)
+record_future_send_in_jsonl(df_iot, df_plc, output_path=r"../datas/gold/mqtt_iot_plc_send.jsonl")
