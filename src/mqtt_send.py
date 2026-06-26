@@ -15,5 +15,4 @@ df_plc = (
     df_plc.sort_values("timestamp")
       .reset_index(drop=True)
 )
-list_of_list_of_sensor:list[list[Sensor]] = split_df_by_timestamp_and_create_list_of_sensor(df_iot)
-print(list_of_list_of_sensor[0])
+list_of_list_of_sensor:list[list[Sensor]] = record_future_send_in_json(df_iot)

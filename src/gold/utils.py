@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
@@ -47,7 +48,6 @@ def create_list_of_list_of_sensor(df: pd.DataFrame, columns: list[str])-> list[S
     verify_columns(df,columns)
     verify_all_line_have_same_timestamp(df)
     list_of_machines_sensors:list[Sensor] = []
-    print(f"Timestamp: {df["timestamp"].unique().tolist()}")
     for line in df.itertuples(): # iteration sur chaque ligne (une ligne par machine)
         list_of_machines_sensors.append(
             Sensor(
@@ -94,21 +94,33 @@ def create_list_of_list_of_sensor(df: pd.DataFrame, columns: list[str])-> list[S
 
     return list_of_machines_sensors
 
-def split_df_by_timestamp_and_create_list_of_sensor(df: pd.DataFrame)->list[list[Sensor]]:
+def record_future_send_in_json(df: pd.DataFrame, output_dir: str = "../datas/gold")->list[list[Sensor]]:
     columns = ["timestamp", "machine_id", "iot_vitesse_rotation", "iot_courant_moteur", "iot_pression_hydraulique", "iot_temperature", "iot_vibration_peak", "iot_charge_moteur"]
     verify_columns(df,columns)
     results:list[list[Sensor]] = []
-    with ThreadPoolExecutor(max_workers=get_dynamic_max_workers(60)) as executor:
-        futures = []
+    for index, (group_value, group_df) in enumerate(df.groupby("timestamp")):
+        record_list_of_sensor_to_json(
+            list_of_sensor=create_list_of_list_of_sensor(
+                df=group_df,
+                columns=columns
+            ),
+            output_dir=output_dir,
+            index=index+1
+        )
 
-        for group_value, group_df in df.groupby("timestamp"):
-            future = executor.submit(
-                create_list_of_list_of_sensor,
-                group_df,
-                columns
-            )
-            futures.append(future)
-
-        for future in as_completed(futures):
-            results.append(future.result())
     return results
+
+def record_list_of_sensor_to_json(list_of_sensor: list[Sensor], index:int, output_dir: str = "../datas/gold")->None:
+    """
+    Crée un fichier JSON par liste de capteurs et l'enregistre dans output_dir.
+    Les fichiers sont numérotés à partir de 1 : 1.json, 2.json, ...
+
+    :param index:
+    :param list_of_sensor: liste de listes de capteurs
+    :param output_dir: dossier de destination des fichiers JSON
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    file_path = os.path.join(output_dir, f"{index}.json")
+    data = [sensor.get_data() for sensor in list_of_sensor]
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)

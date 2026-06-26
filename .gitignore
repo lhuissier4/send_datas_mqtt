@@ -3,6 +3,8 @@
 datas/bronze/*.csv
 datas/silver/*.csv
 datas/gold/*.csv
+datas/gold/*.json
 note mqtt.md
 __marimo__
 .obsidian
+**/__pycache__/*
