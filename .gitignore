@@ -1,8 +1,8 @@
 .idea
 .venv
-bronze/*.csv
-silver/*.csv
-gold/*.csv
+datas/bronze/*.csv
+datas/silver/*.csv
+datas/gold/*.csv
 note mqtt.md
 __marimo__
 .obsidian
