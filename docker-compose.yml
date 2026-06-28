@@ -1,0 +1,47 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "${MQTT_PORT:-1883}:1883"   # MQTT
+      - "9001:9001"   # websockets
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:-iot}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-iot}
+      POSTGRES_DB: ${PG_DATABASE:-iot}
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - ./timescaledb/data:/var/lib/postgresql/data
+      - ./timescaledb/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-iot} -d ${PG_DATABASE:-iot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  telegraf:
+    image: telegraf:1.32
+    container_name: telegraf
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_started
+      timescaledb:
+        condition: service_healthy
+    environment:
+      PG_USER: ${PG_USER:-iot}
+      PG_PASSWORD: ${PG_PASSWORD:-iot}
+      PG_DATABASE: ${PG_DATABASE:-iot}
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
