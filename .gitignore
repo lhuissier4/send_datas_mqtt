@@ -13,3 +13,4 @@ mosquitto/data
 mosquitto/log
 timescaledb/data
 **/__pycache__/*
+**/.ipynb_checkpoints
