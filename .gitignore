@@ -14,3 +14,7 @@ mosquitto/log
 timescaledb/data
 **/__pycache__/*
 **/.ipynb_checkpoints
+
+.github/
+.kilocode/
+.opencode/

@@ -1,47 +1,86 @@
 services:
-  mosquitto:
+  mspr2-mosquitto:
     image: eclipse-mosquitto:2
-    container_name: mosquitto
+    container_name: mspr2-mosquitto
     restart: unless-stopped
     ports:
       - "${MQTT_PORT:-1883}:1883"   # MQTT
-      - "9001:9001"   # websockets
+      - "${MQTT_WEBSOCKET_PORT:-9001}:9001"   # websockets
     volumes:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
 
-  timescaledb:
+  mspr2-timescaledb:
     image: timescale/timescaledb:latest-pg16
-    container_name: timescaledb
+    container_name: mspr2-timescaledb
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${PG_USER:-iot}
-      POSTGRES_PASSWORD: ${PG_PASSWORD:-iot}
-      POSTGRES_DB: ${PG_DATABASE:-iot}
+      POSTGRES_USER: ${TIMESCALEDB_USER:-iot}
+      POSTGRES_PASSWORD: ${TIMESCALEDB_PASSWORD:-iot}
+      POSTGRES_DB: ${TIMESCALEDB_DATABASE:-iot}
     ports:
-      - "${PG_PORT:-5432}:5432"
+      - "${TIMESCALEDB_PORT:-5459}:5432"
     volumes:
-      - ./timescaledb/data:/var/lib/postgresql/data
+      - ../../.mspr2_data_timescaledb:/var/lib/postgresql/data
       - ./timescaledb/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-iot} -d ${PG_DATABASE:-iot}"]
+      test: ["CMD-SHELL", "pg_isready -U ${TIMESCALEDB_USER:-iot} -d ${TIMESCALEDB_DATABASE:-iot}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  telegraf:
+  mspr2-telegraf:
     image: telegraf:1.32
-    container_name: telegraf
+    container_name: mspr2-telegraf
     restart: unless-stopped
     depends_on:
-      mosquitto:
+      mspr2-mosquitto:
         condition: service_started
-      timescaledb:
+      mspr2-timescaledb:
         condition: service_healthy
     environment:
-      PG_USER: ${PG_USER:-iot}
-      PG_PASSWORD: ${PG_PASSWORD:-iot}
-      PG_DATABASE: ${PG_DATABASE:-iot}
+      PG_USER: ${TIMESCALEDB_USER:-iot}
+      PG_PASSWORD: ${TIMESCALEDB_PASSWORD:-iot}
+      PG_DATABASE: ${TIMESCALEDB_DATABASE:-iot}
     volumes:
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+
+
+  mspr2-postgres:
+    image: postgres:18
+    container_name: mspr2-postgres_business_mspr
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_business_app_mspr2:/var/lib/postgresql
+      - ./datas/gold:/datas/gold:ro
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mspr2-flyway-business-postgres:
+    container_name: mspr2-flyway-business-postgres
+    image: flyway/flyway
+    volumes:
+      - ./bdd/migrations:/flyway/sql
+    depends_on:
+      mspr2-postgres:
+        condition: service_healthy       # ← attend le healthcheck, pas juste le démarrage
+    command: >
+      -url=jdbc:postgresql://mspr2-postgres:5432/${POSTGRES_DB}
+      -schemas=public
+      -user=${POSTGRES_USER}
+      -password=${POSTGRES_PASSWORD}
+      migrate
+  
+
+volumes:
+  postgres_business_app_mspr2:
