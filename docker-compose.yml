@@ -11,21 +11,46 @@ services:
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
 
-  mspr2-timescaledb:
-    image: timescale/timescaledb:latest-pg16
-    container_name: mspr2-timescaledb
+  mspr2-influxdb-live:
+    image: influxdb:2
+    container_name: mspr2-influxdb-live
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${TIMESCALEDB_USER:-iot}
-      POSTGRES_PASSWORD: ${TIMESCALEDB_PASSWORD:-iot}
-      POSTGRES_DB: ${TIMESCALEDB_DATABASE:-iot}
     ports:
-      - "${TIMESCALEDB_PORT:-5459}:5432"
+      - "${INFLUXDB_LIVE_PORT:-8086}:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_USERNAME:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_PASSWORD:-adminadmin}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_LIVE_ORG:-iot}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET_LIVE:-sensor_live}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_LIVE_TOKEN:-iot-live-token}
     volumes:
-      - ../../.mspr2_data_timescaledb:/var/lib/postgresql/data
-      - ./timescaledb/init:/docker-entrypoint-initdb.d
+      - influxdb_live_data_mspr2:/var/lib/influxdb2
+      - influxdb_live_config_mspr2:/etc/influxdb2
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${TIMESCALEDB_USER:-iot} -d ${TIMESCALEDB_DATABASE:-iot}"]
+      test: ["CMD", "influx", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mspr2-influxdb-staging:
+    image: influxdb:2
+    container_name: mspr2-influxdb-staging
+    restart: unless-stopped
+    ports:
+      - "${INFLUXDB_STAGING_PORT:-8087}:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_USERNAME:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_PASSWORD:-adminadmin}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_STAGING_ORG:-iot}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET_STAGING:-sensor_staging}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_STAGING_TOKEN:-iot-staging-token}
+    volumes:
+      - influxdb_staging_data_mspr2:/var/lib/influxdb2
+      - influxdb_staging_config_mspr2:/etc/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -37,12 +62,12 @@ services:
     depends_on:
       mspr2-mosquitto:
         condition: service_started
-      mspr2-timescaledb:
+      mspr2-influxdb-staging:
         condition: service_healthy
     environment:
-      PG_USER: ${TIMESCALEDB_USER:-iot}
-      PG_PASSWORD: ${TIMESCALEDB_PASSWORD:-iot}
-      PG_DATABASE: ${TIMESCALEDB_DATABASE:-iot}
+      INFLUXDB_STAGING_TOKEN: ${INFLUXDB_STAGING_TOKEN:-iot-staging-token}
+      INFLUXDB_STAGING_ORG: ${INFLUXDB_STAGING_ORG:-iot}
+      INFLUXDB_BUCKET_STAGING: ${INFLUXDB_BUCKET_STAGING:-sensor_staging}
     volumes:
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
 
@@ -84,3 +109,7 @@ services:
 
 volumes:
   postgres_business_app_mspr2:
+  influxdb_live_data_mspr2:
+  influxdb_live_config_mspr2:
+  influxdb_staging_data_mspr2:
+  influxdb_staging_config_mspr2:
