@@ -40,46 +40,36 @@ PLC_COLUMNS = [
 ]
 
 
-def _verify_sorted_by_timestamp(df: pd.DataFrame, name: str) -> None:
-    if not df["timestamp"].is_monotonic_increasing:
-        raise ValueError(f"{name} must be sorted ascending by 'timestamp'")
-
-
-def _tick_records(group: pd.DataFrame, value_columns: list[str]) -> list[dict]:
+def _records_by_timestamp(df: pd.DataFrame, value_columns: list[str]) -> pd.Series:
     """
-    Convertit un seul tick (lignes partageant un même timestamp) en la liste
-    de ses records (un dict {timestamp, id_machine, <col>: <val>} par valeur
-    non-NA de `value_columns`). Le melt reste vectorisé, mais borné à ce
-    tick : jamais à la totalité du dataset.
-    """
-    long = group.melt(
-        id_vars=["timestamp", "machine_id"],
-        value_vars=value_columns,
-        var_name="field",
-        value_name="value",
-    ).dropna(subset=["value"])
-
-    return [
-        {"timestamp": t, "id_machine": m, field: v}
-        for t, m, field, v in zip(long["timestamp"], long["machine_id"], long["field"], long["value"])
-    ]
-
-
-def _iter_ticks(df: pd.DataFrame, value_columns: list[str]):
-    """
-    Itère (timestamp, records) tick par tick, sans jamais matérialiser plus
-    d'un tick à la fois. `df` doit déjà être trié par timestamp.
+    Transforme un DataFrame en une série indexée par timestamp, dont chaque
+    valeur est la liste des records (un dict {timestamp, id_machine, <col>: <val>}
+    par valeur de `value_columns`) partageant ce timestamp.
 
     :param df: DataFrame source (colonnes timestamp, machine_id, *value_columns)
     :param value_columns: colonnes à "melter" en un record chacune
     """
     verify_columns(df, ["timestamp", "machine_id", *value_columns])
 
-    for ts, group in df.groupby("timestamp", sort=False):
-        yield ts, _tick_records(group, value_columns)
+    # 1 ligne machine -> 1 ligne par valeur, en une passe vectorisée
+    long = df.melt(
+        id_vars=["timestamp", "machine_id"],
+        value_vars=value_columns,
+        var_name="field",
+        value_name="value",
+    )
 
+    # pas de record pour une valeur NA
+    long = long.dropna(subset=["value"])
 
-_END = object()
+    # un dict par enregistrement (chaque valeur garde sa propre clé)
+    long["record"] = [
+        {"timestamp": t, "id_machine": m, field: v}
+        for t, m, field, v in zip(long["timestamp"], long["machine_id"], long["field"], long["value"])
+    ]
+
+    # regroupe par timestamp -> une liste de records par tick
+    return long.groupby("timestamp", sort=True)["record"].apply(list)
 
 
 def record_future_send_in_jsonl(
@@ -96,41 +86,33 @@ def record_future_send_in_jsonl(
     le même tableau ; un timestamp présent uniquement côté PLC produit une
     ligne contenant seulement ses records PLC.
 
-    df_iot et df_plc doivent déjà être triés par timestamp croissant. La
-    fusion se fait en streaming (merge à deux curseurs, comme un
-    merge-sort) : un seul tick à la fois est tenu en mémoire, ce qui borne
-    la RAM utilisée quel que soit le nombre total de lignes.
+    Approche vectorisée + écriture séquentielle unique : très rapide même
+    sur des millions de lignes / centaines de milliers de timestamps.
 
-    :param df_iot: DataFrame IoT (colonnes timestamp, machine_id, iot_*), trié par timestamp
-    :param df_plc: DataFrame PLC optionnel (colonnes timestamp, machine_id, id_*), trié par timestamp
+    :param df_iot: DataFrame IoT (colonnes timestamp, machine_id, iot_*)
+    :param df_plc: DataFrame PLC optionnel (colonnes timestamp, machine_id, id_*)
     :param output_path: chemin du fichier .jsonl de sortie
-    :raises ValueError: si df_iot ou df_plc n'est pas trié par timestamp croissant
     """
-    _verify_sorted_by_timestamp(df_iot, "df_iot")
-    if df_plc is not None:
-        _verify_sorted_by_timestamp(df_plc, "df_plc")
-
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-    iot_ticks = _iter_ticks(df_iot, SENSOR_COLUMNS)
-    plc_ticks = _iter_ticks(df_plc, PLC_COLUMNS) if df_plc is not None else iter(())
+    iot_groups = _records_by_timestamp(df_iot, SENSOR_COLUMNS)
 
+    if df_plc is not None:
+        plc_groups = _records_by_timestamp(df_plc, PLC_COLUMNS)
+    else:
+        plc_groups = pd.Series(dtype=object)
+
+    # union triée des timestamps présents côté IoT et/ou PLC
+    timestamps = sorted(set(iot_groups.index) | set(plc_groups.index))
+
+    # une seule ouverture de fichier, une ligne JSON par timestamp
     with open(output_path, "w", encoding="utf-8") as f:
-        iot_ts, iot_records = next(iot_ticks, (_END, None))
-        plc_ts, plc_records = next(plc_ticks, (_END, None))
-
-        while iot_ts is not _END or plc_ts is not _END:
-            if plc_ts is _END or (iot_ts is not _END and iot_ts < plc_ts):
-                records = iot_records
-                iot_ts, iot_records = next(iot_ticks, (_END, None))
-            elif iot_ts is _END or plc_ts < iot_ts:
-                records = plc_records
-                plc_ts, plc_records = next(plc_ticks, (_END, None))
-            else:  # même timestamp des deux côtés -> fusion sur la même ligne
-                records = iot_records + plc_records
-                iot_ts, iot_records = next(iot_ticks, (_END, None))
-                plc_ts, plc_records = next(plc_ticks, (_END, None))
-
+        for ts in timestamps:
+            records = []
+            if ts in iot_groups.index:
+                records.extend(iot_groups.loc[ts])
+            if ts in plc_groups.index:
+                records.extend(plc_groups.loc[ts])
             f.write(json.dumps(records, ensure_ascii=False))
             f.write("\n")
 
@@ -140,75 +122,3 @@ def name_csv_file(folder_path: Optional[str | Path] ,type_dst:str, filename:str,
     else:
         folder_path = ""
     return f"{Path(folder_path, type_dst+ "_" +filename+extension)}"
-
-def split_dataframe_by_prefix(
-    df: pd.DataFrame,
-    column_name: str,
-    prefix: str
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    # Crée un masque booléen : True si la valeur commence par le préfixe
-    mask = df[column_name].astype(str).str.startswith(prefix, na=False)
-
-    # DataFrame avec les lignes qui commencent par le préfixe
-    matching_df = df[mask].copy()
-
-    # DataFrame avec les autres lignes
-    non_matching_df = df[~mask].copy()
-
-    return matching_df, non_matching_df
-
-
-def remove_rows_containing_string_in_column(
-    df: pd.DataFrame,
-    column_name: str,
-    string_to_remove: str,
-    max_workers: int | None = None
-) -> pd.DataFrame:
-    # Détermine automatiquement le nombre de threads disponibles
-    if max_workers is None:
-        max_workers = os.cpu_count() or 1
-
-    # Évite de créer plus de threads que de lignes
-    max_workers = min(max_workers, len(df))
-
-    # Découpe le DataFrame en morceaux
-    chunk_size = max(1, len(df) // max_workers)
-
-    chunks = [
-        df.iloc[start:start + chunk_size]
-        for start in range(0, len(df), chunk_size)
-    ]
-
-    def filter_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
-        # Supprime les lignes où la colonne contient le string recherché
-        mask = ~chunk[column_name].astype(str).str.contains(
-            string_to_remove,
-            case=False,
-            na=False,
-            regex=False
-        )
-
-        return chunk[mask]
-
-    # Exécute le filtrage en parallèle
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        filtered_chunks = list(executor.map(filter_chunk, chunks))
-
-    # Fusionne les morceaux filtrés
-    return pd.concat(filtered_chunks, ignore_index=True)
-
-
-def create_table_with_id_and_unique_label(df:pd.DataFrame, label_column:str)->pd.DataFrame:
-    if len(df.columns.tolist()) == 0:
-        raise ValueError("The dataframe must contain a column")
-    if label_column not in df.columns:
-        raise ValueError(f"The dataframe not the column {label_column}")
-    if len(df)==0:
-        raise ValueError("The dataframe must contain at least one row")
-
-    df = df[[label_column]].drop_duplicates(subset=[label_column])
-    df["id"] = df[label_column].astype("category").cat.codes + 1
-    return df
-
-def rename_columns_of_dataframe(df:pd.DataFrame, mapping:dict[str,str])-> None:
-    return df.rename(columns=mapping, inplace=True)
