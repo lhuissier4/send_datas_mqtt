@@ -21,3 +21,6 @@ bdd/parquet/*.parquet
 /bdd/parquet/.flush_checkpoint
 .claude/
 openspec
+/datas/gold/mqtt_iot_plc_send.7z
+/datas/mqtt_iot_plc_send.jsonl
+**/__init__.py

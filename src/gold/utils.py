@@ -122,3 +122,74 @@ def name_csv_file(folder_path: Optional[str | Path] ,type_dst:str, filename:str,
     else:
         folder_path = ""
     return f"{Path(folder_path, type_dst+ "_" +filename+extension)}"
+def split_dataframe_by_prefix(
+    df: pd.DataFrame,
+    column_name: str,
+    prefix: str
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    # Crée un masque booléen : True si la valeur commence par le préfixe
+    mask = df[column_name].astype(str).str.startswith(prefix, na=False)
+
+    # DataFrame avec les lignes qui commencent par le préfixe
+    matching_df = df[mask].copy()
+
+    # DataFrame avec les autres lignes
+    non_matching_df = df[~mask].copy()
+
+    return matching_df, non_matching_df
+
+
+def remove_rows_containing_string_in_column(
+    df: pd.DataFrame,
+    column_name: str,
+    string_to_remove: str,
+    max_workers: int | None = None
+) -> pd.DataFrame:
+    # Détermine automatiquement le nombre de threads disponibles
+    if max_workers is None:
+        max_workers = os.cpu_count() or 1
+
+    # Évite de créer plus de threads que de lignes
+    max_workers = min(max_workers, len(df))
+
+    # Découpe le DataFrame en morceaux
+    chunk_size = max(1, len(df) // max_workers)
+
+    chunks = [
+        df.iloc[start:start + chunk_size]
+        for start in range(0, len(df), chunk_size)
+    ]
+
+    def filter_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
+        # Supprime les lignes où la colonne contient le string recherché
+        mask = ~chunk[column_name].astype(str).str.contains(
+            string_to_remove,
+            case=False,
+            na=False,
+            regex=False
+        )
+
+        return chunk[mask]
+
+    # Exécute le filtrage en parallèle
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        filtered_chunks = list(executor.map(filter_chunk, chunks))
+
+    # Fusionne les morceaux filtrés
+    return pd.concat(filtered_chunks, ignore_index=True)
+
+
+def create_table_with_id_and_unique_label(df:pd.DataFrame, label_column:str)->pd.DataFrame:
+    if len(df.columns.tolist()) == 0:
+        raise ValueError("The dataframe must contain a column")
+    if label_column not in df.columns:
+        raise ValueError(f"The dataframe not the column {label_column}")
+    if len(df)==0:
+        raise ValueError("The dataframe must contain at least one row")
+
+    df = df[[label_column]].drop_duplicates(subset=[label_column])
+    df["id"] = df[label_column].astype("category").cat.codes + 1
+    return df
+
+def rename_columns_of_dataframe(df:pd.DataFrame, mapping:dict[str,str])-> None:
+    return df.rename(columns=mapping, inplace=True)
