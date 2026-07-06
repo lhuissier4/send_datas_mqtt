@@ -19,3 +19,5 @@ bdd/parquet/*.parquet
 .kilocode/
 .opencode/
 /bdd/parquet/.flush_checkpoint
+.claude/
+openspec
