@@ -193,3 +193,77 @@ def create_table_with_id_and_unique_label(df:pd.DataFrame, label_column:str)->pd
 
 def rename_columns_of_dataframe(df:pd.DataFrame, mapping:dict[str,str])-> None:
     return df.rename(columns=mapping, inplace=True)
+
+
+def sort_dataframe_by_timestamp(df: pd.DataFrame, timestamp_column: str = "timestamp") -> pd.DataFrame:
+    return df.sort_values(by=timestamp_column, ascending=True).reset_index(drop=True)
+
+
+def build_episode_dataframe(
+    df: pd.DataFrame,
+    id_column: str,
+    id_output_column: str,
+    start_column: str,
+    end_column: str,
+    machine_column: str = "machine_id",
+    timestamp_column: str = "timestamp",
+) -> pd.DataFrame:
+    """
+    Regroupe les lignes consécutives (pour une même machine) partageant le
+    même `id_column` en un épisode : une ligne = un `id` continu, avec son
+    timestamp de début/fin. Un épisode s'arrête dès que l'id change ou que
+    la machine change ; il n'y a pas de notion de durée maximale entre deux
+    lignes (le découpage se fait uniquement sur la succession des lignes du
+    DataFrame, pas sur un écart de temps).
+    """
+    df = sort_dataframe_by_timestamp(df, timestamp_column)
+
+    new_episode = (
+        (df[machine_column] != df[machine_column].shift())
+        | (df[id_column] != df[id_column].shift())
+    )
+    episode_id = new_episode.cumsum()
+
+    return df.groupby(episode_id).agg(**{
+        start_column: (timestamp_column, "min"),
+        end_column: (timestamp_column, "max"),
+        id_output_column: (id_column, "first"),
+        "id_machine": (machine_column, "first"),
+    }).reset_index(drop=True)
+
+
+
+
+
+
+def attach_alerte_maintenance_ids(
+    df_simule: pd.DataFrame,
+    df_alerte: pd.DataFrame,
+    df_maintenance: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Sépare `df_simule` (colonne `label_gmao`) en un DataFrame alerte et un
+    DataFrame maintenance, et associe à chacun le `id` numérique
+    correspondant à son label depuis `df_alerte` / `df_maintenance`
+    (lookup tables `label_gmao, id`). Les lignes ne correspondant à aucun
+    des deux préfixes (ex: `Sain`), ainsi que celles dont le label n'a pas
+    de correspondance dans la lookup table, sont exclues du résultat.
+    """
+    alerte_rows, remainder = split_dataframe_by_prefix(df_simule, "label_gmao", "Alerte")
+    maintenance_rows, _ = split_dataframe_by_prefix(remainder, "label_gmao", "Maintenance")
+
+    rename_columns_of_dataframe(alerte_rows, {"label_gmao": "label_alerte"})
+    rename_columns_of_dataframe(maintenance_rows, {"label_gmao": "label_maintenance"})
+
+    alerte_rows = alerte_rows.merge(
+        df_alerte.rename(columns={"label_gmao": "label_alerte", "id": "id_alerte"}),
+        on="label_alerte",
+        how="inner",
+    )
+    maintenance_rows = maintenance_rows.merge(
+        df_maintenance.rename(columns={"label_gmao": "label_maintenance", "id": "id_maintenance"}),
+        on="label_maintenance",
+        how="inner",
+    )
+
+    return alerte_rows, maintenance_rows
