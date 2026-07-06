@@ -86,6 +86,10 @@ def query_pending(
         f"{base_url}/api/v3/query_sql",
         json={"db": INFLUXDB_DATABASE_STAGING, "q": query},
     )
+    if response.status_code == 400 and "not found" in response.text:
+        # La table `sensor_data` n'existe pas encore : Telegraf ne l'a pas
+        # creee car aucun point n'a jamais ete ecrit dans sensor_staging.
+        return pd.DataFrame()
     response.raise_for_status()
     return pd.DataFrame.from_records(response.json())
 
