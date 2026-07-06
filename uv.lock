@@ -535,18 +535,19 @@ wheels = [
 ]
 
 [[package]]
-name = "influxdb-client"
-version = "1.50.0"
+name = "influxdb3-python"
+version = "0.20.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
+    { name = "pyarrow" },
     { name = "python-dateutil" },
     { name = "reactivex" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/07/23/77a945465a556a8067917ba84bac04e312cee2a4fe03d41198fe79ed9c84/influxdb_client-1.50.0.tar.gz", hash = "sha256:c2a4906573097103fa6f9a2ab08efe2eb48c2fed60b8129a3e320affde445743", size = 386749, upload-time = "2026-01-23T09:39:39.322Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3b/f0/3fb234e83316e439a91d4d7ee5a2f569b9b81e5a709618c4168dca3a087b/influxdb3_python-0.20.0.tar.gz", hash = "sha256:f1e28c2f4f244d48006beeb82be7aea82ebdd3b3e1807250d124b6f1d53c5943", size = 102084, upload-time = "2026-06-11T06:49:53.012Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7f/ec/6b120b4a86f6fadc7ddb1d7c7cdcb15bcfb332deb022ab60df51bcd4494c/influxdb_client-1.50.0-py3-none-any.whl", hash = "sha256:f172975cf7f0c95bfe74f288b31273393b164d2c58a948de55497d9956ab49be", size = 746289, upload-time = "2026-01-23T09:39:37.377Z" },
+    { url = "https://files.pythonhosted.org/packages/cd/2f/06961cdb1d38d0cdb3c6876970db227e69824a293896af6d1eb983fa1534/influxdb3_python-0.20.0-py3-none-any.whl", hash = "sha256:0914f05c2ed9b96f2962fb3d410068dda9c411b562dab22fae1d6c6599a37927", size = 86330, upload-time = "2026-06-11T06:49:52.016Z" },
 ]
 
 [[package]]
@@ -2628,7 +2629,7 @@ name = "send-datas-mqtt"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "influxdb-client" },
+    { name = "influxdb3-python" },
     { name = "jupyter" },
     { name = "marimo" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -2640,6 +2641,7 @@ dependencies = [
     { name = "psycopg2-binary" },
     { name = "pyarrow" },
     { name = "python-dotenv" },
+    { name = "requests" },
 ]
 
 [package.dev-dependencies]
@@ -2650,7 +2652,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "influxdb-client", specifier = ">=1.49.0" },
+    { name = "influxdb3-python", specifier = ">=0.15.0" },
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "marimo", specifier = ">=0.23.10" },
     { name = "numpy", specifier = ">=2.2.6" },
@@ -2659,6 +2661,7 @@ requires-dist = [
     { name = "psycopg2-binary", specifier = ">=2.9.12" },
     { name = "pyarrow", specifier = ">=19.0.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "requests", specifier = ">=2.32.0" },
 ]
 
 [package.metadata.requires-dev]

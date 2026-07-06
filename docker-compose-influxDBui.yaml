@@ -1,30 +1,23 @@
 services:
-  influxdb3:
-    image: influxdb:3-core
-    container_name: influxdb3-core
-    command:
-      - influxdb3
-      - serve
-      - --node-id=local-node
-      - --object-store=file
-      - --data-dir=/var/lib/influxdb3
+
+  influxdb3-ui-a:
+    image: influxdata/influxdb3-ui:1.9.0
+    container_name: mspr2-influxdb3-explorer_a
     ports:
-      - "${INFLUXDBUI_PORT:-8181}:8181"
+      - "${INFLUXDBUI_IP_HOST:-127.0.0.1}:${INFLUXDBUI_A_WEBUI_PORT:-8888}:8080"
     volumes:
-      - influxdb3-data_mspr2:/var/lib/influxdb3
+      - influxdb3-ui-db_a_mspr2:/db
     restart: unless-stopped
 
-  influxdb3-ui:
+  influxdb3-ui-b:
     image: influxdata/influxdb3-ui:1.9.0
-    container_name: influxdb3-explorer
+    container_name: mspr2-influxdb3-explorer_b
     ports:
-      - "${INFLUXDBUI_IP_HOST:-127.0.0.1}:${INFLUXDBUI_WEBUI_PORT:-8888}:8080"
+      - "${INFLUXDBUI_IP_HOST:-127.0.0.1}:${INFLUXDBUI_B_WEBUI_PORT:-8888}:8080"
     volumes:
-      - influxdb3-ui-db_mspr2:/db
-    depends_on:
-      - influxdb3
+      - influxdb3-ui-db_b_mspr2:/db
     restart: unless-stopped
 
 volumes:
-  influxdb3-data_mspr2:
-  influxdb3-ui-db_mspr2:
+  influxdb3-ui-db_a_mspr2:
+  influxdb3-ui-db_b_mspr2:

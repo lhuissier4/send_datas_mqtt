@@ -18,3 +18,4 @@ bdd/parquet/*.parquet
 .github/
 .kilocode/
 .opencode/
+/bdd/parquet/.flush_checkpoint

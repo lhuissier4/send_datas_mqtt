@@ -1,0 +1,95 @@
+### Tests HTTP directs sur les deux instances InfluxDB 3 Core du projet.
+### A utiliser avec l'extension VSCode "REST Client" (humao.rest-client) :
+### ouvrir ce fichier, cliquer sur "Send Request" au-dessus de chaque bloc.
+###
+### Ces valeurs correspondent aux defauts de .env.example. Si vous avez
+### change le port/token dans votre .env, mettez a jour les variables ici.
+
+@live_host = localhost
+@live_port = 8183
+@live_token = apiv3_mspr2-live-dev-token
+@live_db = sensor_live
+
+@staging_host = localhost
+@staging_port = 8182
+@staging_token = apiv3_mspr2-staging-dev-token
+@staging_db = sensor_staging
+
+###############################################################################
+# LIVE (mspr2-influxdb-live)
+###############################################################################
+
+### Live - healthcheck (pas d'auth requise)
+GET http://{{live_host}}:{{live_port}}/health
+
+### Live - lister les tables (verifie le token + l'existence de la base)
+POST http://{{live_host}}:{{live_port}}/api/v3/query_sql
+Authorization: Bearer {{live_token}}
+Content-Type: application/json
+
+{
+  "db": "{{live_db}}",
+  "q": "SHOW TABLES"
+}
+
+### Live - ecrire un point de test (line protocol, precision secondes)
+POST http://{{live_host}}:{{live_port}}/api/v3/write_lp?db={{live_db}}&precision=s
+Authorization: Bearer {{live_token}}
+Content-Type: text/plain
+
+sensor_data,id_machine=test,sensor=test value=42 {{$timestamp}}
+
+### Live - relire les 5 derniers points de sensor_data
+POST http://{{live_host}}:{{live_port}}/api/v3/query_sql
+Authorization: Bearer {{live_token}}
+Content-Type: application/json
+
+{
+  "db": "{{live_db}}",
+  "q": "SELECT * FROM sensor_data ORDER BY time DESC LIMIT 5"
+}
+
+### Live - sans token (doit repondre 401)
+POST http://{{live_host}}:{{live_port}}/api/v3/query_sql
+Content-Type: application/json
+
+{
+  "db": "{{live_db}}",
+  "q": "SHOW TABLES"
+}
+
+###############################################################################
+# STAGING (mspr2-influxdb-staging)
+###############################################################################
+
+### Staging - healthcheck (pas d'auth requise)
+GET http://{{staging_host}}:{{staging_port}}/health
+
+### Staging - lister les tables
+POST http://{{staging_host}}:{{staging_port}}/api/v3/query_sql
+Authorization: Bearer {{staging_token}}
+Content-Type: application/json
+
+{
+  "db": "{{staging_db}}",
+  "q": "SHOW TABLES"
+}
+
+### Staging - relire les 5 derniers points de sensor_data (alimente par Telegraf)
+POST http://{{staging_host}}:{{staging_port}}/api/v3/query_sql
+Authorization: Bearer {{staging_token}}
+Content-Type: application/json
+
+{
+  "db": "{{staging_db}}",
+  "q": "SELECT * FROM sensor_data ORDER BY time DESC LIMIT 5"
+}
+
+### Staging - sans token (doit repondre 401)
+POST http://{{staging_host}}:{{staging_port}}/api/v3/query_sql
+Content-Type: application/json
+
+{
+  "db": "{{staging_db}}",
+  "q": "SHOW TABLES"
+}

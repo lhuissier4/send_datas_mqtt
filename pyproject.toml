@@ -3,7 +3,7 @@ name = "send-datas-mqtt"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
-    "influxdb-client>=1.49.0",
+    "influxdb3-python>=0.15.0",
     "jupyter>=1.1.1",
     "marimo>=0.23.10",
     "numpy>=2.2.6",
@@ -12,6 +12,7 @@ dependencies = [
     "psycopg2-binary>=2.9.12",
     "pyarrow>=19.0.1",
     "python-dotenv>=1.2.2",
+    "requests>=2.32.0",
 ]
 
 [dependency-groups]

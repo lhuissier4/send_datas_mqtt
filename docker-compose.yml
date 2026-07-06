@@ -12,65 +12,151 @@ services:
       - ./mosquitto/log:/mosquitto/log
 
   mspr2-influxdb-live:
-    image: influxdb:2
+    image: influxdb:3-core
     container_name: mspr2-influxdb-live
     restart: unless-stopped
-    ports:
-      - "${INFLUXDB_LIVE_PORT:-8086}:8086"
+    # L'image tourne en UID 1500 par defaut, mais un volume Docker nomme est
+    # cree avec des permissions root : sans ca, "serve" echoue en
+    # PermissionDenied sur /var/lib/influxdb3/data.
+    user: root
     environment:
-      DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_USERNAME:-admin}
-      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_PASSWORD:-adminadmin}
-      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_LIVE_ORG:-iot}
-      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET_LIVE:-sensor_live}
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_LIVE_TOKEN:-iot-live-token}
+      INFLUXDB_LIVE_TOKEN: ${INFLUXDB_LIVE_TOKEN:-apiv3_mspr2-live-dev-token}
+    # Le token admin doit etre fourni via un fichier (--admin-token-file) au
+    # format {"token": "...", "name": "_admin"} ; il n'est adopte qu'au tout
+    # premier demarrage (volume de donnees vide). --disable-authz garde
+    # /health et /ping accessibles sans token pour le healthcheck Docker.
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        umask 077 &&
+        printf '{"token": "%s", "name": "_admin"}' "$$INFLUXDB_LIVE_TOKEN" > /tmp/admin-token.json &&
+        exec influxdb3 serve
+        --node-id live
+        --object-store file
+        --data-dir /var/lib/influxdb3/data
+        --admin-token-file /tmp/admin-token.json
+        --disable-authz health,ping
+    ports:
+      - "${INFLUXDB_LIVE_PORT:-8183}:8181"
     volumes:
-      - influxdb_live_data_mspr2:/var/lib/influxdb2
-      - influxdb_live_config_mspr2:/etc/influxdb2
+      - influxdb_live_data_mspr2:/var/lib/influxdb3/data
     healthcheck:
-      test: ["CMD", "influx", "ping"]
+      test: ["CMD", "curl", "-f", "http://localhost:8181/health"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   mspr2-influxdb-staging:
-    image: influxdb:2
+    image: influxdb:3-core
     container_name: mspr2-influxdb-staging
     restart: unless-stopped
-    ports:
-      - "${INFLUXDB_STAGING_PORT:-8087}:8086"
+    user: root
     environment:
-      DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_USERNAME:-admin}
-      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_PASSWORD:-adminadmin}
-      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_STAGING_ORG:-iot}
-      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET_STAGING:-sensor_staging}
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_STAGING_TOKEN:-iot-staging-token}
+      INFLUXDB_STAGING_TOKEN: ${INFLUXDB_STAGING_TOKEN:-apiv3_mspr2-staging-dev-token}
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        umask 077 &&
+        printf '{"token": "%s", "name": "_admin"}' "$$INFLUXDB_STAGING_TOKEN" > /tmp/admin-token.json &&
+        exec influxdb3 serve
+        --node-id staging
+        --object-store file
+        --data-dir /var/lib/influxdb3/data
+        --admin-token-file /tmp/admin-token.json
+        --disable-authz health,ping
+    ports:
+      - "${INFLUXDB_STAGING_PORT:-8182}:8181"
     volumes:
-      - influxdb_staging_data_mspr2:/var/lib/influxdb2
-      - influxdb_staging_config_mspr2:/etc/influxdb2
+      - influxdb_staging_data_mspr2:/var/lib/influxdb3/data
     healthcheck:
-      test: ["CMD", "influx", "ping"]
+      test: ["CMD", "curl", "-f", "http://localhost:8181/health"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  # Cree la base sensor_staging avec une retention courte : InfluxDB 3 Core ne
+  # supporte pas la suppression par predicat (cf. parquet_flush.py, qui avance
+  # un checkpoint plutot que de supprimer), donc c'est la retention qui purge
+  # les points deja exportes. Job one-shot, idempotent (`|| true` si la base
+  # existe deja).
+  mspr2-influxdb-staging-init:
+    image: influxdb:3-core
+    container_name: mspr2-influxdb-staging-init
+    depends_on:
+      mspr2-influxdb-staging:
+        condition: service_healthy
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        influxdb3 create database ${INFLUXDB_DATABASE_STAGING:-sensor_staging}
+        --host http://mspr2-influxdb-staging:8181
+        --token ${INFLUXDB_STAGING_TOKEN:-apiv3_mspr2-staging-dev-token}
+        --retention-period ${INFLUXDB_STAGING_RETENTION:-24h} || true
+    restart: "no"
+
   mspr2-telegraf:
-    image: telegraf:1.32
+    image: telegraf:1.39
     container_name: mspr2-telegraf
     restart: unless-stopped
     depends_on:
       mspr2-mosquitto:
         condition: service_started
-      mspr2-influxdb-staging:
-        condition: service_healthy
+      mspr2-influxdb-staging-init:
+        condition: service_completed_successfully
     environment:
-      INFLUXDB_STAGING_TOKEN: ${INFLUXDB_STAGING_TOKEN:-iot-staging-token}
-      INFLUXDB_STAGING_ORG: ${INFLUXDB_STAGING_ORG:-iot}
-      INFLUXDB_BUCKET_STAGING: ${INFLUXDB_BUCKET_STAGING:-sensor_staging}
+      INFLUXDB_DATABASE_STAGING: ${INFLUXDB_DATABASE_STAGING:-sensor_staging}
+      INFLUXDB_STAGING_TOKEN: ${INFLUXDB_STAGING_TOKEN:-apiv3_mspr2-staging-dev-token}
     volumes:
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
 
+  # Script B : exporte periodiquement sensor_staging vers Parquet (cf.
+  # src/parquet_flush.py). Tourne dans le meme reseau Docker que les
+  # instances InfluxDB, donc host/port ciblent le nom de service interne
+  # (port 8181) et non le port publie sur l'hote.
+  mspr2-parquet-flush:
+    build: .
+    container_name: mspr2-parquet-flush
+    restart: unless-stopped
+    depends_on:
+      mspr2-influxdb-staging-init:
+        condition: service_completed_successfully
+    environment:
+      INFLUXDB_STAGING_HOST: mspr2-influxdb-staging
+      INFLUXDB_STAGING_PORT: 8181
+      INFLUXDB_DATABASE_STAGING: ${INFLUXDB_DATABASE_STAGING:-sensor_staging}
+      INFLUXDB_STAGING_TOKEN: ${INFLUXDB_STAGING_TOKEN:-apiv3_mspr2-staging-dev-token}
+      PARQUET_FLUSH_INTERVAL_MINUTES: ${PARQUET_FLUSH_INTERVAL_MINUTES:-5}
+      PARQUET_OUTPUT_DIR: ${PARQUET_OUTPUT_DIR:-./bdd/parquet}
+      PARQUET_FLUSH_SAFETY_MARGIN_SECONDS: ${PARQUET_FLUSH_SAFETY_MARGIN_SECONDS:-30}
+    command: ["python", "src/parquet_flush.py"]
+    volumes:
+      - ./bdd/parquet:/app/bdd/parquet
+
+  # Script A : abonnement live a usine/iot/# -> sensor_live (cf.
+  # src/mqtt_live_monitor.py), independant du pipeline Telegraf.
+  mspr2-mqtt-live-monitor:
+    build: .
+    container_name: mspr2-mqtt-live-monitor
+    restart: unless-stopped
+    depends_on:
+      mspr2-mosquitto:
+        condition: service_started
+      mspr2-influxdb-live:
+        condition: service_healthy
+    environment:
+      MQTT_HOST: mspr2-mosquitto
+      MQTT_PORT: 1883
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_KEEPALIVE: ${MQTT_KEEPALIVE:-60}
+      MQTT_QOS: ${MQTT_QOS:-1}
+      MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-usine/iot}
+      INFLUXDB_LIVE_HOST: mspr2-influxdb-live
+      INFLUXDB_LIVE_PORT: 8181
+      INFLUXDB_DATABASE_LIVE: ${INFLUXDB_DATABASE_LIVE:-sensor_live}
+      INFLUXDB_LIVE_TOKEN: ${INFLUXDB_LIVE_TOKEN:-apiv3_mspr2-live-dev-token}
+      LIVE_FLUSH_INTERVAL_SECONDS: ${LIVE_FLUSH_INTERVAL_SECONDS:-30}
+    command: ["python", "src/mqtt_live_monitor.py"]
 
   mspr2-postgres:
     image: postgres:18
@@ -110,6 +196,4 @@ services:
 volumes:
   postgres_business_app_mspr2:
   influxdb_live_data_mspr2:
-  influxdb_live_config_mspr2:
   influxdb_staging_data_mspr2:
-  influxdb_staging_config_mspr2:
