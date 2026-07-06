@@ -1,6 +1,7 @@
 import os
 import json
-from typing import Any
+from pathlib import Path
+from typing import Any, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 
@@ -14,6 +15,7 @@ def get_dynamic_max_workers(group_count: int) -> int:
         group_count,
         max(1, cpu_count - 1)
     )
+
 def verify_columns(df: pd.DataFrame, columns: list[str])->None:
     missing_columns:list[str] = []
     for column in columns:
@@ -21,6 +23,7 @@ def verify_columns(df: pd.DataFrame, columns: list[str])->None:
             missing_columns.append(column)
     if len(missing_columns) != 0:
         raise ValueError(f"Missing column(s) in dataset: \"{", ".join(missing_columns)}\"")
+
 def verify_all_line_have_same_timestamp(df: pd.DataFrame)->None:
     timestamps:list[str] = df["timestamp"].unique().tolist()
     if len(timestamps) != 1:
@@ -112,3 +115,10 @@ def record_future_send_in_jsonl(
                 records.extend(plc_groups.loc[ts])
             f.write(json.dumps(records, ensure_ascii=False))
             f.write("\n")
+
+def name_csv_file(folder_path: Optional[str | Path] ,type_dst:str, filename:str, extension:str=".csv")->str:
+    if folder_path:
+        folder_path = Path(folder_path)
+    else:
+        folder_path = ""
+    return f"{Path(folder_path, type_dst+ "_" +filename+extension)}"
