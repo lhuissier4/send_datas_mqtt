@@ -54,4 +54,17 @@ configuration dans `.env` (copier `.env.example`).
   uv run python src/parquet_flush.py
   ```
 
-Les trois peuvent tourner en parallele ; arret propre avec `Ctrl+C` (SIGINT/SIGTERM).
+- **`src/load_nominal_values.py`** : charge en une seule passe
+  `datas/gold/postgres_nominale_values.csv` (valeurs nominales par machine)
+  dans la table `nominale_values` de la base InfluxDB `sensor_live`, a la
+  place de l'ancienne table Postgres du meme nom. Lecture du CSV par blocs
+  (`NOMINAL_VALUES_CHUNK_SIZE`) pour ne pas charger tout le fichier en
+  memoire. Re-executable sans risque : rejouer le meme CSV ecrase les memes
+  points (memes tags + timestamp) au lieu d'en creer des doublons.
+  ```sh
+  uv run python src/load_nominal_values.py
+  ```
+
+Les quatre peuvent tourner en parallele (le chargement des valeurs nominales
+est ponctuel, pas un processus continu) ; arret propre avec `Ctrl+C`
+(SIGINT/SIGTERM).
