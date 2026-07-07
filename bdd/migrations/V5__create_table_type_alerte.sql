@@ -4,5 +4,5 @@ CREATE TABLE type_alerte(
 );
 
 COPY type_alerte (label_gmao, id)
-FROM '/datas/gold/postgres_maintenance.csv'
+FROM '/datas/gold/postgres_alerte.csv'
 WITH (FORMAT csv, HEADER true);
