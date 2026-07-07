@@ -232,6 +232,28 @@ def build_episode_dataframe(
     }).reset_index(drop=True)
 
 
+def build_machine_age_dataframe(
+    df: pd.DataFrame,
+    machine_column: str = "machine_id",
+    age_column: str = "age_jours",
+    timestamp_column: str = "timestamp",
+    id_output_column: str = "id_machine",
+    age_output_column: str = "age_machine_jours",
+    timestamp_output_column: str = "premier_timestamp",
+) -> pd.DataFrame:
+    """
+    Construit un DataFrame avec, pour chaque machine, son id, son âge et le
+    premier timestamp auquel elle apparaît dans le jeu de données.
+    """
+    verify_columns(df, [machine_column, age_column, timestamp_column])
+
+    df_sorted = sort_dataframe_by_timestamp(df, timestamp_column)
+
+    return df_sorted.groupby(machine_column, sort=False).agg(**{
+        id_output_column: (machine_column, "first"),
+        age_output_column: (age_column, "first"),
+        timestamp_output_column: (timestamp_column, "first"),
+    }).reset_index(drop=True)
 
 
 
