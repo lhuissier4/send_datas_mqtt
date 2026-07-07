@@ -25,3 +25,5 @@ openspec
 /datas/mqtt_iot_plc_send.jsonl
 **/__init__.py
 
+**/.~lock*
+**/*.zip

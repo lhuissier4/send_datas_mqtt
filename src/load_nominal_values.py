@@ -40,12 +40,14 @@ NOMINAL_VALUES_CSV_PATH = os.getenv(
 NOMINAL_VALUES_CHUNK_SIZE = int(os.getenv("NOMINAL_VALUES_CHUNK_SIZE", "20000"))
 
 MEASUREMENT = "nominale_values"
-TAG_COLUMNS = ["machine_id", "statut_nominal"]
+TAG_COLUMNS = ["machine_id", "statut_nominal", "id_type_metal", "id_regime_cadence"]
 FIELD_COLUMNS = [
     "vitesse_rotation_nominal",
     "courant_moteur_nominal",
     "pression_hydraulique_nominal",
     "temp_base_moteur",
+    "facteur_cadence",
+    "temps_cycle_sec",
 ]
 
 _running = True
