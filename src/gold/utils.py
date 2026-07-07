@@ -256,6 +256,35 @@ def build_machine_age_dataframe(
     }).reset_index(drop=True)
 
 
+def build_machine_dataframe(
+    df: pd.DataFrame,
+    df_type_machine: pd.DataFrame,
+    machine_column: str = "machine_id",
+    type_column: str = "type_machine",
+    timestamp_column: str = "timestamp",
+    id_output_column: str = "id_machine",
+    type_id_output_column: str = "id_type_machine",
+) -> pd.DataFrame:
+    """
+    Construit un DataFrame avec, pour chaque machine, son id et l'id de son
+    type (jointure du label `type_column` sur la table de référence
+    `df_type_machine`, colonnes `type_column, id` - cf. postgres_type_machine.csv).
+    """
+    verify_columns(df, [machine_column, type_column, timestamp_column])
+    verify_columns(df_type_machine, [type_column, "id"])
+
+    df_sorted = sort_dataframe_by_timestamp(df, timestamp_column)
+
+    machines = df_sorted.groupby(machine_column, sort=False).agg(**{
+        id_output_column: (machine_column, "first"),
+        type_column: (type_column, "first"),
+    }).reset_index(drop=True)
+
+    return machines.merge(
+        df_type_machine[[type_column, "id"]].rename(columns={"id": type_id_output_column}),
+        on=type_column,
+        how="inner",
+    )[[id_output_column, type_id_output_column]]
 
 
 def attach_alerte_maintenance_ids(
