@@ -107,6 +107,10 @@ def write_parquet_atomic(df: pd.DataFrame, output_dir: Path) -> Path:
     fd, tmp_name = tempfile.mkstemp(dir=output_dir, suffix=".parquet.tmp")
     os.close(fd)
     tmp_path = Path(tmp_name)
+    # mkstemp cree le fichier en 0600 par defaut : le conteneur tourne en
+    # root, donc sans ce chmod les parquets ne seraient lisibles par aucun
+    # script lance cote hote (ex. correlate_sensor_alerte.py).
+    os.chmod(tmp_path, 0o644)
     try:
         df.to_parquet(tmp_path, index=False)
         tmp_path.rename(final_path)
