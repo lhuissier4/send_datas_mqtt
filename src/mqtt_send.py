@@ -161,7 +161,10 @@ def main() -> None:
 
                 # Si le broker est tombe, on attend la reconnexion avant
                 # d'envoyer la ligne (sinon les messages partent dans le vide).
-                if not _connected.is_set():
+                # En QoS 0 il n'y a de toute facon aucune garantie de livraison,
+                # donc ce garde-fou ne s'applique qu'en QoS >= 1 (ou l'on veut
+                # un PUBACK).
+                if MQTT_QOS > 0 and not _connected.is_set():
                     print("Broker indisponible, attente de reconnexion...", flush=True)
                     while _running and not _connected.wait(timeout=1):
                         pass
