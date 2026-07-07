@@ -1,0 +1,56 @@
+{
+  "uid": "mspr2-machine-age",
+  "title": "Age machine vs taux de panne",
+  "tags": ["mspr2", "alerte", "age_machine"],
+  "timezone": "browser",
+  "editable": true,
+  "time": { "from": "now-1y", "to": "now" },
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Age machine vs pannes",
+      "description": "Age de chaque machine (jours) a cote de son nombre de pannes et de son taux de panne sur la periode selectionnee, pour reperer une correlation age/fiabilite.",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "datasource", "uid": "-- Mixed --" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) / (($__to - $__from)/1000.0) * 100 AS downtime_pct FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "postgres", "uid": "mspr2-postgres-business" },
+          "format": "table",
+          "rawSql": "SELECT id_machine, age_machine_jours FROM age_machine ORDER BY age_machine_jours DESC",
+          "rawQuery": true
+        }
+      ],
+      "transformations": [
+        { "id": "joinByField", "options": { "byField": "id_machine", "mode": "outer" } }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "downtime_pct" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "decimals", "value": 2 }] },
+          { "matcher": { "id": "byName", "options": "age_machine_jours" }, "properties": [{ "id": "unit", "value": "d" }] }
+        ]
+      }
+    }
+  ]
+}

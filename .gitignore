@@ -27,3 +27,4 @@ openspec
 
 **/.~lock*
 **/*.zip
+src/gold/generate_sector.py

@@ -14,6 +14,7 @@ import pandas as pd
 from utils import (
     build_machine_age_dataframe,
     build_machine_dataframe,
+    build_machine_secteur_historique_dataframe,
     create_table_with_id_and_unique_label,
     name_csv_file,
     record_future_send_in_jsonl,
@@ -128,6 +129,12 @@ def main() -> None:
     df_machine = build_machine_dataframe(df_simule, df_type_machine)
     df_machine.to_csv(
         name_csv_file(folder_path=GOLD_DIR, filename="machine", extension=".csv", type_dst="postgres"),
+        index=False, encoding="utf-8",
+    )
+
+    df_machine_secteur_historique = build_machine_secteur_historique_dataframe(df_simule)
+    df_machine_secteur_historique.to_csv(
+        name_csv_file(folder_path=GOLD_DIR, filename="machine_secteur_historique", extension=".csv", type_dst="postgres"),
         index=False, encoding="utf-8",
     )
 

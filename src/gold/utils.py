@@ -215,8 +215,13 @@ def build_episode_dataframe(
     la machine change ; il n'y a pas de notion de durée maximale entre deux
     lignes (le découpage se fait uniquement sur la succession des lignes du
     DataFrame, pas sur un écart de temps).
+
+    Le tri se fait par (machine, timestamp) et non par timestamp seul : les
+    machines partagent souvent les mêmes timestamps (relevés en parallèle),
+    donc un tri par timestamp seul entrelacerait leurs lignes et casserait
+    la détection de "lignes consécutives pour une même machine".
     """
-    df = sort_dataframe_by_timestamp(df, timestamp_column)
+    df = df.sort_values(by=[machine_column, timestamp_column], ascending=True).reset_index(drop=True)
 
     new_episode = (
         (df[machine_column] != df[machine_column].shift())
@@ -285,6 +290,34 @@ def build_machine_dataframe(
         on=type_column,
         how="inner",
     )[[id_output_column, type_id_output_column]]
+
+
+def build_machine_secteur_historique_dataframe(
+    df: pd.DataFrame,
+    machine_column: str = "machine_id",
+    secteur_column: str = "secteur",
+    timestamp_column: str = "timestamp",
+    id_output_column: str = "id_machine",
+    date_output_column: str = "date_mise_en_service",
+) -> pd.DataFrame:
+    """
+    Construit l'historique des secteurs par machine : une ligne par
+    "run" de valeurs consécutives de `secteur_column` (pour une même
+    machine, triées par timestamp), avec le timestamp de début du run
+    comme `date_output_column`. Aucune ligne n'est émise pour une lecture
+    dont le secteur est identique à la précédente.
+    """
+    episodes = build_episode_dataframe(
+        df,
+        id_column=secteur_column,
+        id_output_column=secteur_column,
+        start_column=date_output_column,
+        end_column="_fin_secteur",
+        machine_column=machine_column,
+        timestamp_column=timestamp_column,
+    )
+
+    return episodes[[id_output_column, secteur_column, date_output_column]]
 
 
 def attach_alerte_maintenance_ids(
