@@ -46,6 +46,21 @@ Trois dashboards sont charges au demarrage (dossier `grafana/dashboards/`) :
 - **Age machine vs taux de panne** : age de chaque machine a cote de son
   taux de panne, pour reperer une correlation age/fiabilite.
 
+**Calcul du "Taux de panne"** : pour chaque machine, sur la fenetre de
+temps selectionnee dans le dashboard (coin superieur droit),
+
+```
+taux de panne (%) = somme des durees des episodes d'alerte / duree de la fenetre * 100
+```
+
+Chaque episode d'alerte est une ligne de la table InfluxDB `alerte`
+(`time` = debut, `fin_alerte` = fin) ; sa duree est `fin_alerte - time`. On
+somme ces durees pour la machine, on divise par la duree totale de la
+fenetre selectionnee (`$__to - $__from`), et on multiplie par 100 — c'est
+donc la proportion du temps de la fenetre pendant laquelle la machine
+etait en alerte. Requete exacte : voir `grafana/dashboards/failure-rate.json`
+(champ `downtime_pct`).
+
 ## Scripts Python
 
 Chaque script est independant et se lance comme `mqtt_send.py`, avec sa

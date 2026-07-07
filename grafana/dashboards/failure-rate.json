@@ -40,8 +40,8 @@
           "unit": "none"
         },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "downtime_pct" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "decimals", "value": 2 }] },
-          { "matcher": { "id": "byName", "options": "downtime_seconds" }, "properties": [{ "id": "unit", "value": "s" }] }
+          { "matcher": { "id": "byName", "options": "downtime_pct" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "decimals", "value": 2 }, { "id": "displayName", "value": "Taux de panne" }] },
+          { "matcher": { "id": "byName", "options": "downtime_seconds" }, "properties": [{ "id": "unit", "value": "secondes" }] }
         ]
       }
     },
@@ -91,6 +91,104 @@
           }
         }
       ]
+    },
+    {
+      "id": 3,
+      "type": "barchart",
+      "title": "Taux de panne par machine (histogramme)",
+      "description": "Vue rapide du panel 'Pannes par machine' : une barre par machine, plus facile a comparer d'un coup d'oeil qu'un tableau.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 20 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) AS downtime_seconds, sum(fin_alerte/1000000000.0 - extract(epoch from time)) / (($__to - $__from)/1000.0) * 100 AS downtime_pct FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine ORDER BY downtime_pct DESC\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        }
+      ],
+      "transformations": [
+        { "id": "filterFieldsByName", "options": { "include": { "names": ["id_machine", "downtime_pct"] } } }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percent", "decimals": 2 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "downtime_pct" }, "properties": [{ "id": "displayName", "value": "Taux de panne" }] }
+        ]
+      },
+      "options": {
+        "orientation": "auto",
+        "xTickLabelRotation": 0,
+        "showValue": "auto",
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+    {
+      "id": 4,
+      "type": "barchart",
+      "title": "Pannes par type de machine (histogramme)",
+      "description": "Vue rapide du panel 'Pannes par type de machine' : une barre par type, nombre de pannes cumule.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 29 },
+      "datasource": { "type": "datasource", "uid": "-- Mixed --" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) AS downtime_seconds FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "postgres", "uid": "mspr2-postgres-business" },
+          "format": "table",
+          "rawSql": "SELECT m.id_machine, tm.type_machine FROM machine m JOIN type_machine tm ON m.id_type_machine = tm.id",
+          "rawQuery": true
+        }
+      ],
+      "transformations": [
+        { "id": "joinByField", "options": { "byField": "id_machine", "mode": "outer" } },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "type_machine": { "operation": "groupby" },
+              "nb_pannes": { "operation": "aggregate", "aggregations": ["sum"] }
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "none" },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "xTickLabelRotation": 0,
+        "showValue": "auto",
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
     }
   ]
 }
