@@ -196,7 +196,7 @@ def main() -> None:
 
     output_path = resolve_path(CORRELATE_SENSOR_ALERTE_OUTPUT_PATH)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    correlated.to_csv(output_path, index=False, encoding="utf-8")
+    correlated.to_csv(output_path, index=False, encoding="utf-8") #remplacer par le code d'entraînement
     matched = int(correlated["id_alerte"].notna().sum())
     print(
         f"[correlate] {len(correlated)} lignes ecrites -> {output_path} "

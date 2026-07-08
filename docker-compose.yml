@@ -158,6 +158,74 @@ services:
       LIVE_FLUSH_INTERVAL_SECONDS: ${LIVE_FLUSH_INTERVAL_SECONDS:-30}
     command: ["python", "src/mqtt_live_monitor.py"]
 
+  # Service d'inference RUL (placeholder) : abonnement live a usine/iot/#,
+  # separe de l'ingestion (cf. src/rul_inference/service.py) pour ne pas
+  # coupler le cycle de vie du modele a celui de mqtt_live_monitor.py.
+  mspr2-rul-inference:
+    build: .
+    container_name: mspr2-rul-inference
+    restart: unless-stopped
+    depends_on:
+      mspr2-mosquitto:
+        condition: service_started
+      mspr2-influxdb-live:
+        condition: service_healthy
+    environment:
+      MQTT_HOST: mspr2-mosquitto
+      MQTT_PORT: 1883
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_KEEPALIVE: ${MQTT_KEEPALIVE:-60}
+      MQTT_QOS: ${MQTT_QOS:-1}
+      MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-usine/iot}
+      INFLUXDB_LIVE_HOST: mspr2-influxdb-live
+      INFLUXDB_LIVE_PORT: 8181
+      INFLUXDB_DATABASE_LIVE: ${INFLUXDB_DATABASE_LIVE:-sensor_live}
+      INFLUXDB_LIVE_TOKEN: ${INFLUXDB_LIVE_TOKEN:-apiv3_mspr2-live-dev-token}
+      INFERENCE_INTERVAL_SECONDS: ${INFERENCE_INTERVAL_SECONDS:-60}
+      MODEL_RELOAD_INTERVAL_SECONDS: ${MODEL_RELOAD_INTERVAL_SECONDS:-300}
+      RUL_MODEL_PATH: ${RUL_MODEL_PATH:-models/rul_cox_model.joblib}
+      PYTHONPATH: src
+    command: ["python", "-m", "rul_inference.service"]
+    volumes:
+      # Partage avec mspr2-train-rul-model : c'est ce volume qui permet a un
+      # modele nouvellement promu d'etre repris par ce service (cf.
+      # MODEL_RELOAD_INTERVAL_SECONDS dans rul_inference/service.py).
+      - ./models:/app/models
+
+  # Entrainement mensuel du modele de RUL (cf. src/gold/train_rul_model.py) :
+  # assemble les donnees de production, entraine un candidat, et ne le
+  # promeut en production (./models, partage avec mspr2-rul-inference) que
+  # s'il est meilleur que le modele actuellement deploye (cf.
+  # train_rul_model.py::promouvoir_si_meilleur -- la "suite de tests CI/CD").
+  mspr2-train-rul-model:
+    build: .
+    container_name: mspr2-train-rul-model
+    restart: unless-stopped
+    depends_on:
+      mspr2-postgres:
+        condition: service_healthy
+      mspr2-influxdb-live:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: mspr2-postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      INFLUXDB_LIVE_HOST: mspr2-influxdb-live
+      INFLUXDB_LIVE_PORT: 8181
+      INFLUXDB_DATABASE_LIVE: ${INFLUXDB_DATABASE_LIVE:-sensor_live}
+      INFLUXDB_LIVE_TOKEN: ${INFLUXDB_LIVE_TOKEN:-apiv3_mspr2-live-dev-token}
+      CORRELATE_SENSOR_ALERTE_OUTPUT_PATH: ${CORRELATE_SENSOR_ALERTE_OUTPUT_PATH:-./datas/gold/sensor_data_alerte_correlated.csv}
+      RUL_MODEL_PATH: ${RUL_MODEL_PATH:-models/rul_cox_model.joblib}
+      RUL_CANDIDATE_MODEL_PATH: ${RUL_CANDIDATE_MODEL_PATH:-models/rul_cox_model.candidate.joblib}
+      TRAIN_INTERVAL_DAYS: ${TRAIN_INTERVAL_DAYS:-30}
+    command: ["python", "src/gold/train_rul_model_scheduler.py"]
+    volumes:
+      - ./datas/gold:/app/datas/gold:ro
+      - ./models:/app/models
+
   mspr2-postgres:
     image: postgres:18
     container_name: mspr2-postgres_business_mspr
