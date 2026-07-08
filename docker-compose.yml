@@ -171,6 +171,8 @@ services:
         condition: service_started
       mspr2-influxdb-live:
         condition: service_healthy
+      mspr2-postgres:
+        condition: service_healthy
     environment:
       MQTT_HOST: mspr2-mosquitto
       MQTT_PORT: 1883
@@ -183,6 +185,11 @@ services:
       INFLUXDB_LIVE_PORT: 8181
       INFLUXDB_DATABASE_LIVE: ${INFLUXDB_DATABASE_LIVE:-sensor_live}
       INFLUXDB_LIVE_TOKEN: ${INFLUXDB_LIVE_TOKEN:-apiv3_mspr2-live-dev-token}
+      POSTGRES_HOST: mspr2-postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
       INFERENCE_INTERVAL_SECONDS: ${INFERENCE_INTERVAL_SECONDS:-60}
       MODEL_RELOAD_INTERVAL_SECONDS: ${MODEL_RELOAD_INTERVAL_SECONDS:-300}
       RUL_MODEL_PATH: ${RUL_MODEL_PATH:-models/rul_cox_model.joblib}

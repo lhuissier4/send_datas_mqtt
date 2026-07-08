@@ -6,22 +6,55 @@ Charge le bundle (modele Cox + imputer + encodages) exporte par
 l'entrainement) et l'applique aux dernieres valeurs capteurs connues par
 machine.
 
-Tant qu'aucun modele n'a ete entraine (`RUL_MODEL_PATH` introuvable), ou tant
-que le cache temps reel ne contient que les capteurs bruts (cf. limite
-documentee dans `rul_inference/service.py` : la reconstitution complete du
-vecteur de features -- machine_id, valeurs nominales, historique -- reste un
-TODO cote pipeline de production), `predict_rul` retombe sur une valeur fixe
-plutot que de planter.
+`rul_inference/service.py` reconstitue `machine_id`, `age_jours`, les valeurs
+nominales, `type_metal`/`iot_statut_machine` (lectures PLC) et `label_gmao`
+(via Postgres/InfluxDB, cf. `_build_contexte_machine`,
+`_decoder_contexte_plc`, `_reconstruire_label_gmao`) avant d'appeler
+`predict_rul`, qui derive ensuite ici les colonnes calculees a partir de ce
+vecteur reconstitue : `type_censure` depuis `label_gmao` (cf.
+`_ajouter_type_censure_si_possible`, reproduit
+`rul_pipeline.py::calculer_type_censure`) et les ecarts/ratios nominal-mesure
+(cf. `_ajouter_ecarts_si_possible`, reproduit
+`ajouter_ecarts_nominal_mesure`/`ajouter_ratio_nominal_mesure`). Reste hors de
+portee de l'inference temps reel (feature non calculable a partir d'un seul
+point) : les moyennes/ecarts-types glissants (`ajouter_stats_glissantes`, qui
+ont besoin d'un historique de mesures) et les colonnes sans source de
+production identifiee (`secteur`, `nb_pieces_cumule`,
+`observation_operateur`... cf. `rul_data_assembly.py`) -- elles restent NaN,
+gerees par l'imputer sauvegarde a l'entrainement.
+
+Tant qu'aucun modele n'a ete entraine (`RUL_MODEL_PATH` introuvable),
+`predict_rul` retombe sur une valeur fixe plutot que de planter.
 """
 
 import os
 from pathlib import Path
 
 import joblib
+import numpy as np
+import pandas as pd
 
-from gold.rul_pipeline import CAPTEURS_IOT, preparer_vecteur_inference
+from gold.rul_pipeline import (
+    CAPTEURS_IOT,
+    ajouter_ecarts_nominal_mesure,
+    ajouter_ratio_nominal_mesure,
+    calculer_type_censure,
+    preparer_vecteur_inference,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+# (capteur brut, valeur nominale correspondante) attendus ensemble par
+# ajouter_ecarts_nominal_mesure/ajouter_ratio_nominal_mesure (cf. rul_pipeline.py) :
+# on ne les applique que si les deux sont presents, pour ne jamais planter sur
+# un vecteur partiellement reconstitue (machine tout juste demarree, cache
+# nominal pas encore charge...).
+_PAIRES_ECART_NOMINAL = [
+    ("iot_vitesse_rotation", "vitesse_rotation_nominal"),
+    ("iot_courant_moteur", "courant_moteur_nominal"),
+    ("iot_pression_hydraulique", "pression_hydraulique_nominal"),
+    ("iot_temperature", "temp_base_moteur"),
+]
 
 RUL_MODEL_PATH = os.getenv("RUL_MODEL_PATH", "models/rul_cox_model.joblib")
 
@@ -52,20 +85,60 @@ def load_model():
     return _bundle
 
 
+def _ajouter_ecarts_si_possible(features_brutes: dict) -> dict:
+    """Reproduit les ecarts/ratios nominal-mesure de l'entrainement (cf.
+    `rul_pipeline.py::ajouter_ecarts_nominal_mesure`/`ajouter_ratio_nominal_mesure`)
+    sur un vecteur d'inference.
+
+    Une paire (capteur, nominal) pas encore disponible (machine tout juste
+    demarree, cache nominal pas encore charge...) produit un ecart NaN plutot
+    que de faire planter la prediction -- gere ensuite par l'imputer comme
+    n'importe quelle feature manquante.
+    """
+    colonnes = {}
+    for brut, nominal in _PAIRES_ECART_NOMINAL:
+        colonnes[brut] = float(features_brutes[brut]) if features_brutes.get(brut) is not None else np.nan
+        colonnes[nominal] = float(features_brutes[nominal]) if features_brutes.get(nominal) is not None else np.nan
+
+    ligne = pd.DataFrame([colonnes])
+    ligne = ajouter_ecarts_nominal_mesure(ligne)
+    ligne = ajouter_ratio_nominal_mesure(ligne)
+    ecarts = {col: val for col, val in ligne.iloc[0].items() if col not in colonnes}
+    return {**features_brutes, **ecarts}
+
+
+def _ajouter_type_censure_si_possible(features_brutes: dict) -> dict:
+    """Deduit `type_censure` de `label_gmao` (cf.
+    `rul_pipeline.py::calculer_type_censure`), si `label_gmao` a pu etre
+    reconstitue (cf. `service.py::_reconstruire_label_gmao`). Sans
+    `label_gmao` connu (machine dont on n'a pas encore d'horodatage), on
+    n'invente pas de valeur par defaut : `type_censure` reste absent, impute
+    comme n'importe quelle feature manquante.
+    """
+    if "label_gmao" not in features_brutes:
+        return features_brutes
+    ligne = pd.DataFrame([{"label_gmao": features_brutes["label_gmao"]}])
+    ligne = calculer_type_censure(ligne)
+    return {**features_brutes, "type_censure": ligne.iloc[0]["type_censure"]}
+
+
 def predict_rul(id_machine: str, features: dict[str, float]) -> dict[str, float]:
     """Estime la RUL (en jours) et un score de risque a partir des dernieres valeurs capteurs.
 
-    `features` contient les dernieres valeurs connues (pas forcement toutes
-    presentes) pour les capteurs de `CAPTEURS_IOT`. Les autres colonnes
-    attendues par le modele (machine_id, valeurs nominales, historique...) sont
-    absentes tant que le pipeline de production ne les reconstitue pas (cf.
-    TODO dans `train_rul_model.py`) : elles sont imputees comme a
-    l'entrainement.
+    `features` contient les dernieres valeurs capteurs connues (cf.
+    `CAPTEURS_IOT`) completees par `service.py` avec `age_jours` et les
+    valeurs nominales de la machine (cf. `_build_contexte_machine`). Les
+    ecarts/ratios nominal-mesure sont recalcules ici (cf.
+    `_ajouter_ecarts_si_possible`) exactement comme a l'entrainement. Les
+    colonnes encore sans source de production (cf. module docstring) restent
+    absentes : imputees comme a l'entrainement.
     """
     if _bundle is None:
         return {"rul_jours_estime": -1.0, "risque": 0.0}
 
     features_brutes = {**features, "machine_id": id_machine}
+    features_brutes = _ajouter_type_censure_si_possible(features_brutes)
+    features_brutes = _ajouter_ecarts_si_possible(features_brutes)
     ligne = preparer_vecteur_inference(
         features_brutes,
         _bundle["mappings_categories"],

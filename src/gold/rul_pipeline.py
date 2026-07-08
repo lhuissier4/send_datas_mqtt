@@ -9,9 +9,9 @@ Format d'entree attendu par `construire_features` : une ligne par
 `(machine_id, timestamp)`, avec les colonnes brutes du simulateur (capteurs IoT,
 valeurs nominales, `label_gmao`, `iot_statut_machine`, `age_jours`,
 `nb_pieces_cumule`, categorielles machine...). Cote production, `sensor_data` est
-en format long (cf. `mqtt_send.py`) ; le pivot vers ce format large reste un TODO
-(cf. `train_rul_model.py::pivot_sensor_readings_to_wide`) -- ce module ne
-resout pas cet ecart, il porte uniquement la logique de nettoyage/entrainement
+en format long (cf. `mqtt_send.py`) ; le pivot vers ce format large est fait par
+`rul_data_assembly.py::pivot_sensor_readings_to_wide` -- ce module ne s'occupe
+pas de cet assemblage, il porte uniquement la logique de nettoyage/entrainement
 du notebook telle quelle.
 """
 
@@ -484,12 +484,15 @@ def preparer_vecteur_inference(
     """Applique le meme encodage qu'a l'entrainement a un vecteur de features brutes.
 
     `features_brutes` : dict de valeurs brutes (memes noms de colonnes que le
-    dataframe d'entrainement, ex. `machine_id`, les 7 capteurs IoT...). Les
-    colonnes de `colonnes_gardees` absentes de `features_brutes` (features pas
-    encore reconstituees cote production, cf. TODO dans train_rul_model.py) sont
-    laissees a NaN -- gerees par l'imputer sauvegarde a l'entrainement. Une
-    categorie jamais vue a l'entrainement est traitee comme la categorie de
-    reference (memes colonnes one-hot que `drop_first=True`, toutes a 0).
+    dataframe d'entrainement, ex. `machine_id`, les 7 capteurs IoT, `age_jours`,
+    valeurs nominales... reconstitues cote production par
+    `rul_inference/service.py::_build_contexte_machine`). Les colonnes de
+    `colonnes_gardees` encore absentes de `features_brutes` (moyennes/ecarts-types
+    glissants, ou colonnes sans source de production identifiee, cf.
+    `gold/rul_data_assembly.py`) sont laissees a NaN -- gerees par l'imputer
+    sauvegarde a l'entrainement. Une categorie jamais vue a l'entrainement est
+    traitee comme la categorie de reference (memes colonnes one-hot que
+    `drop_first=True`, toutes a 0).
     """
     ligne = pd.DataFrame([features_brutes])
 
