@@ -4,10 +4,38 @@ import pandas as pd
 import pytest
 
 from gold.correlate_sensor_alerte import (
+    PROJECT_ROOT,
     correlate,
+    empty_alerte_dataframe,
     list_parquet_files_in_window,
     parse_window_end,
+    resolve_path,
 )
+
+
+def test_resolve_path_joins_a_relative_path_against_project_root() -> None:
+    assert resolve_path("bdd/parquet") == PROJECT_ROOT / "bdd/parquet"
+
+
+def test_resolve_path_leaves_an_absolute_path_unchanged() -> None:
+    absolute = Path("/tmp/some/absolute/path")
+
+    assert resolve_path(str(absolute)) == absolute
+
+
+def test_empty_alerte_dataframe_has_expected_columns_and_no_rows() -> None:
+    df = empty_alerte_dataframe()
+
+    assert list(df.columns) == [
+        "debut_alerte",
+        "fin_alerte",
+        "id_machine",
+        "id_alerte",
+    ]
+    assert len(df) == 0
+    assert df["debut_alerte"].dtype == "datetime64[ns]"
+    assert df["fin_alerte"].dtype == "datetime64[ns]"
+    assert df["id_alerte"].dtype == "int64"
 
 
 def test_parse_window_end_extracts_the_end_timestamp() -> None:
