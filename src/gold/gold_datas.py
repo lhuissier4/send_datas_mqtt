@@ -41,7 +41,7 @@ def main() -> None:
     # Niveau 1 : dependent d'un csv gold voisin deja produit ci-dessus
     build_machine.build()
     build_nominale_values.build()
-    #build_mqtt_jsonl.build()
+    build_mqtt_jsonl.build()
     build_maintenance_alerte_influxdb.build_maintenance()
     build_maintenance_alerte_influxdb.build_alerte()
 
