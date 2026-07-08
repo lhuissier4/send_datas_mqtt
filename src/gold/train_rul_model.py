@@ -114,7 +114,18 @@ def build_training_dataset(sensor_df: pd.DataFrame, postgres_lookups: dict[str, 
     session.headers.update({"Authorization": f"Bearer {INFLUXDB_LIVE_TOKEN}"})
     try:
         maintenance_df = rul_data_assembly.fetch_maintenance(session, base_url, INFLUXDB_DATABASE_LIVE)
-        nominale_df = rul_data_assembly.fetch_nominale_values(session, base_url, INFLUXDB_DATABASE_LIVE)
+        # Bornee a la fenetre des donnees capteur en cours de traitement (+
+        # marge d'un jour, pour que meme les toutes premieres lignes trouvent
+        # un releve nominal a leur date ou avant via le merge_asof backward
+        # de merger_valeurs_nominales) : cf. fetch_nominale_values pour le
+        # pourquoi (un fetch complet, non borne, echoue en pratique).
+        nominale_df = rul_data_assembly.fetch_nominale_values(
+            session,
+            base_url,
+            INFLUXDB_DATABASE_LIVE,
+            start=sensor_df["timestamp"].min() - pd.Timedelta(days=1),
+            end=sensor_df["timestamp"].max(),
+        )
     finally:
         session.close()
     print(f"[train] {len(maintenance_df)} episodes de maintenance/panne recuperes", flush=True)

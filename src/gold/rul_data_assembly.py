@@ -120,11 +120,28 @@ def fetch_maintenance(session, base_url: str, database: str) -> pd.DataFrame:
     return df.sort_values("debut_panne").reset_index(drop=True)
 
 
-def fetch_nominale_values(session, base_url: str, database: str) -> pd.DataFrame:
-    """Valeurs nominales par machine (mesure InfluxDB `nominale_values`, cf. load_nominal_values.py)."""
+def fetch_nominale_values(session, base_url: str, database: str, start=None, end=None) -> pd.DataFrame:
+    """Valeurs nominales par machine (mesure InfluxDB `nominale_values`, cf. load_nominal_values.py).
+
+    `start`/`end` (optionnels, `datetime`/`pd.Timestamp`) bornent la requete
+    a la fenetre reellement necessaire (cf.
+    `train_rul_model.py::build_training_dataset`, qui la borne a celle des
+    donnees capteur en cours de traitement) : sans borne, `SELECT *` sur
+    toute la table remonte l'integralite de l'historique en JSON (~3.6 Go
+    pour ~10M points en pratique), ce qui a fait echouer le transfert HTTP
+    (`ChunkedEncodingError: Response ended prematurely`) plutot que de
+    simplement etre lent.
+    """
+    conditions = []
+    if start is not None:
+        conditions.append(f"time >= '{pd.Timestamp(start).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z'")
+    if end is not None:
+        conditions.append(f"time <= '{pd.Timestamp(end).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]}Z'")
+    where_clause = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+
     response = session.post(
         f"{base_url}/api/v3/query_sql",
-        json={"db": database, "q": "SELECT * FROM nominale_values ORDER BY time"},
+        json={"db": database, "q": f"SELECT * FROM nominale_values{where_clause} ORDER BY time"},
     )
     if response.status_code == 400 and "not found" in response.text:
         return pd.DataFrame(columns=["timestamp", "machine_id"])
