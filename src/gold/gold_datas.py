@@ -19,20 +19,57 @@ from utils import (
     name_csv_file,
     record_future_send_in_jsonl,
     remove_rows_containing_string_in_column,
-    split_dataframe_by_prefix,
+    split_dataframe_by_prefix, attach_alerte_maintenance_ids, sort_dataframe_by_timestamp, build_episode_dataframe,
 )
 
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-BRONZE_PATH = PROJECT_ROOT / "datas/bronze/dataset_brut.csv"
-SILVER_IOT_PATH = PROJECT_ROOT / "datas/silver/dataset_iot.csv"
-SILVER_PLC_PATH = PROJECT_ROOT / "datas/silver/dataset_plc.csv"
 GOLD_DIR = PROJECT_ROOT / "datas/gold"
 
 
 def main() -> None:
-    df_simule = pd.read_csv(BRONZE_PATH)
-    df_iot = pd.read_csv(SILVER_IOT_PATH)
-    df_plc = pd.read_csv(SILVER_PLC_PATH)
+    df_simule:pd.DataFrame = pd.DataFrame(pd.read_csv(r"../../datas/silver/dataset_brut.csv"))
+    df_iot = df_simule.drop(columns=[
+        "age_jours",
+        "age_virtuel_jours",
+        "label_gmao",
+        "RUL_jours",
+        "secteur",
+        "type_machine",
+        "vitesse_rotation_nominal",
+        "courant_moteur_nominal",
+        "pression_hydraulique_nominal",
+        "statut_nominal",
+        "type_metal",
+        "temp_base_moteur",
+        "iot_statut_machine",
+        "iot_vibration_rms"
+    ])
+    df_plc = df_simule[[
+        "machine_id",
+        "timestamp",
+        "iot_statut_machine",
+        "type_metal",
+    ]]
+
+    df_iot["timestamp"] = pd.to_datetime(
+        df_iot["timestamp"],
+        format="%Y-%m-%d %H:%M:%S"
+    )
+    df_plc["timestamp"] = pd.to_datetime(
+        df_plc["timestamp"],
+        format="%Y-%m-%d %H:%M:%S"
+    )
+    df_iot.info()
+
+    df_iot = (
+        df_iot.sort_values("timestamp")
+        .reset_index(drop=True)
+    )
+    df_plc = (
+        df_plc.sort_values("timestamp")
+        .reset_index(drop=True)
+    )
 
     GOLD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -142,6 +179,44 @@ def main() -> None:
     df_plc = df_plc.sort_values("timestamp").reset_index(drop=True)
     record_future_send_in_jsonl(df_iot, df_plc, output_path=str(GOLD_DIR / "mqtt_iot_plc_send.jsonl"))
 
-
+    df_alert_complet, df_maintenance_complet = attach_alerte_maintenance_ids(
+        df_simule=df_simule,
+        df_maintenance=df_maintenance,
+        df_alerte=df_alerte_unique
+    )
+    df_alert_filtered = df_alert_complet[["timestamp", "machine_id", "id_alerte"]]
+    df_maintenance_filtered = df_maintenance_complet[["timestamp", "machine_id", "id_maintenance"]]
+    df_alert_filtered = sort_dataframe_by_timestamp(df_alert_filtered)
+    df_maintenance_filtered = sort_dataframe_by_timestamp(df_maintenance_filtered)
+    df_maintenance_clean = build_episode_dataframe(
+        df_maintenance_filtered,
+        id_column="id_maintenance",
+        id_output_column="id_panne",
+        start_column="debut_panne",
+        end_column="fin_panne",
+    )
+    df_alert_clean = build_episode_dataframe(
+        df_alert_filtered,
+        id_column="id_alerte",
+        id_output_column="id_alerte",
+        start_column="debut_alerte",
+        end_column="fin_alerte",
+    )
+    df_maintenance_clean.to_csv(
+        name_csv_file(
+            folder_path=GOLD_DIR,
+            filename="maintenance",
+            extension=".csv",
+            type_dst="influxdb"
+        ), index=False, encoding='utf-8'
+    )
+    df_alert_clean.to_csv(
+        name_csv_file(
+            folder_path=GOLD_DIR,
+            filename="alerte",
+            extension=".csv",
+            type_dst="influxdb"
+        ), index=False, encoding='utf-8'
+    )
 if __name__ == "__main__":
     main()
