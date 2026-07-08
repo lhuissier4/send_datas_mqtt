@@ -34,7 +34,7 @@ def verify_columns(df: pd.DataFrame, columns: list[str])->None:
         if column not in df.columns:
             missing_columns.append(column)
     if len(missing_columns) != 0:
-        raise ValueError(f"Missing column(s) in dataset: \"{", ".join(missing_columns)}\"")
+        raise ValueError(f"Missing column(s) in dataset: \"{', '.join(missing_columns)}\"")
 
 def verify_all_line_have_same_timestamp(df: pd.DataFrame)->None:
     timestamps:list[str] = df["timestamp"].unique().tolist()
@@ -133,7 +133,7 @@ def name_csv_file(folder_path: Optional[str | Path] ,type_dst:str, filename:str,
         folder_path = Path(folder_path)
     else:
         folder_path = ""
-    return f"{Path(folder_path, type_dst+ "_" +filename+extension)}"
+    return f"{Path(folder_path, type_dst + '_' + filename + extension)}"
 def split_dataframe_by_prefix(
     df: pd.DataFrame,
     column_name: str,
