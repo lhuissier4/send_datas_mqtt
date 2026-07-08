@@ -7,13 +7,18 @@ docker compose up -d
 ```
 
 Demarre Mosquitto, Telegraf, la base Postgres metier (Flyway applique les
-migrations automatiquement), et deux instances InfluxDB 3 Core separees,
-chacune protegee par un token admin (`INFLUXDB_LIVE_TOKEN` /
-`INFLUXDB_STAGING_TOKEN`, cf. `.env.example`) :
+migrations automatiquement -- necessite les CSV `datas/gold/postgres_*.csv`,
+cf. [Demarrer a partir d'un dataset simule](#demarrer-a-partir-dun-dataset-simule-rul)
+plus bas si ces fichiers n'existent pas encore), deux instances InfluxDB 3
+Core separees, Grafana (cf. plus bas), et le pipeline RUL :
 - `mspr2-influxdb-live` (port `INFLUXDB_LIVE_PORT`, defaut 8183) : base `sensor_live`
 - `mspr2-influxdb-staging` (port `INFLUXDB_STAGING_PORT`, defaut 8182) : base `sensor_staging`,
   creee avec une retention (`INFLUXDB_STAGING_RETENTION`, defaut 24h) qui purge
   automatiquement les points deja exportes en Parquet.
+- `mspr2-rul-inference` : inference RUL temps reel (cf.
+  [Demarrer a partir d'un dataset simule](#demarrer-a-partir-dun-dataset-simule-rul)).
+- `mspr2-train-rul-model` : reentraine le modele RUL tous les
+  `TRAIN_INTERVAL_DAYS` (defaut 30 jours).
 
 Le token n'est adopte qu'au tout premier demarrage de chaque instance (volume
 de donnees vide) : pour le changer, il faut aussi supprimer le volume Docker
@@ -25,6 +30,78 @@ pour l'URL interne a utiliser a la place).
 
 Requetes HTTP de test (healthcheck, ecriture, requete SQL) : voir
 [`http/influxdb.http`](http/influxdb.http) et [`http/README.md`](http/README.md).
+
+## Demarrer a partir d'un dataset simule (RUL)
+
+Le pipeline RUL (entrainement + inference, cf. `src/gold/train_rul_model.py`
+et `src/rul_inference/`) a besoin d'un dataset simule genere en amont (une
+ligne par `(machine_id, timestamp)`, colonnes capteurs/PLC/valeurs
+nominales/GMAO), depose dans `datas/silver/dataset_brut.csv`. A partir de
+la, dans cet ordre :
+
+1. **Scinder passe/present** (avant tout le reste -- l'ordre compte, cf.
+   point 2) :
+   ```sh
+   uv run python -m gold.split_cold_storage
+   ```
+   `mqtt_send.py` (etape 5) rejoue tout `datas/gold/mqtt_iot_plc_send.jsonl`
+   au compte-goutte, du premier au dernier tick, sans distinction
+   passe/present : pour un dataset simule couvrant des mois, l'essentiel
+   serait donc rejoue en temps reel avant de devenir exploitable. Ce script
+   coupe a `SPLIT_COLD_STORAGE_CUTOFF` (par defaut l'heure actuelle) : la
+   partie anterieure est ecrite directement en stockage froid (`bdd/parquet/`,
+   meme format que `parquet_flush.py`), et seule la partie posterieure reste
+   dans le jsonl que `mqtt_send.py` rejoue.
+
+2. **Generer les autres CSV gold** (tables de reference Postgres, valeurs
+   nominales, episodes alerte/maintenance) :
+   ```sh
+   uv run python -m gold.gold_datas
+   ```
+   A lancer **apres** l'etape 1 : `build_mqtt_jsonl.py` (invoque par
+   `gold_datas`) ne regenere jamais un `mqtt_iot_plc_send.jsonl` deja
+   present, donc dans l'autre ordre le fichier "present seul" de l'etape 1
+   serait ecrase par la version complete (non coupee).
+
+3. **Demarrer la stack** (cf. [Lancer la stack](#lancer-la-stack) plus haut) :
+   Flyway applique les migrations Postgres a partir des CSV generes a
+   l'etape 2.
+
+4. **Charger les episodes et valeurs nominales dans InfluxDB** (une seule
+   fois, scripts ponctuels par blocs -- re-executables sans risque, cf. leur
+   docstring) :
+   ```sh
+   uv run python src/load_alerte.py
+   uv run python src/load_maintenance.py
+   uv run python src/load_nominal_values.py
+   ```
+
+5. **Rejouer la partie "presente" en direct** :
+   ```sh
+   uv run python src/mqtt_send.py
+   ```
+   `mspr2-rul-inference` (deja demarre a l'etape 3) reconstitue alors le
+   contexte de chaque machine (age, valeurs nominales, statut PLC,
+   `label_gmao`) et publie une prediction RUL toutes les
+   `INFERENCE_INTERVAL_SECONDS` (mesure InfluxDB `rul_prediction`, base
+   `sensor_live`) -- une valeur fixe (`rul_jours_estime: -1.0`) tant qu'aucun
+   modele n'a ete entraine (etape 6).
+
+6. **Entrainer un modele RUL** (optionnel : sinon `mspr2-train-rul-model`
+   s'en charge automatiquement tous les `TRAIN_INTERVAL_DAYS`, defaut 30
+   jours) :
+   ```sh
+   uv run python src/gold/correlate_sensor_alerte.py
+   uv run python src/gold/train_rul_model.py
+   ```
+   Le premier correle les lectures capteur du stockage froid (fenetre
+   `CORRELATE_SENSOR_ALERTE_WINDOW_DAYS`, defaut 180 jours) avec les episodes
+   d'alerte InfluxDB (`datas/gold/sensor_data_alerte_correlated.csv`). Le
+   second entraine un modele candidat et ne le promeut en production
+   (`models/rul_cox_model.joblib`, lu par `mspr2-rul-inference`) que s'il
+   depasse le c-index du modele deja deploye. `mspr2-rul-inference` recharge
+   un modele nouvellement promu au plus tard toutes les
+   `MODEL_RELOAD_INTERVAL_SECONDS` (defaut 300s), sans redemarrage.
 
 ## Dashboards Grafana
 
