@@ -57,7 +57,22 @@ def pivot_sensor_readings_to_wide(sensor_df: pd.DataFrame) -> pd.DataFrame:
     mesures d'un meme "tick" MQTT (cf. `mqtt_send.py`/`record_future_send_in_jsonl`),
     donc un simple `pivot_table` regroupe correctement les mesures d'une meme
     ligne logique sans risque de decalage.
+
+    Selon la source, `sensor_df` est deja au format large : le pipeline
+    demarre depuis le dataset simule (`sensor_data_to_parquet.py`) ecrit
+    directement une colonne par capteur/PLC (cf. `COLUMNS` dans ce script),
+    contrairement au pipeline Telegraf (`parquet_flush.py`, alimente par
+    `sensor_staging`) qui produit un format long ("sensor"/"value" a
+    pivoter, cf. `telegraf/telegraf.conf::processors.starlark`). On ne
+    pivote donc que si ces deux colonnes sont presentes.
     """
+    if "sensor" not in sensor_df.columns or "value" not in sensor_df.columns:
+        return (
+            sensor_df.rename(columns={"id_machine": "machine_id"})
+            .sort_values(["machine_id", "timestamp"])
+            .reset_index(drop=True)
+        )
+
     colonnes_a_garder = [c for c in sensor_df.columns if c not in ("sensor", "value")]
 
     wide = sensor_df.pivot_table(
