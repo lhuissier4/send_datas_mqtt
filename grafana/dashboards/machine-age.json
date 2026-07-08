@@ -27,7 +27,7 @@
             "method": "POST",
             "body_type": "raw",
             "body_content_type": "application/json",
-            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) / (($__to - $__from)/1000.0) * 100 AS downtime_pct FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine\"}",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) / (($__to - $__from)/1000.0) * 100 AS temps_arret_pct FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine\"}",
             "headers": [{ "key": "Accept", "value": "application/json" }]
           },
           "root_selector": "",
@@ -47,7 +47,7 @@
       "fieldConfig": {
         "defaults": { "custom": { "align": "auto" } },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "downtime_pct" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "decimals", "value": 2 }, { "id": "displayName", "value": "Taux de panne" }] },
+          { "matcher": { "id": "byName", "options": "temps_arret_pct" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "decimals", "value": 2 }, { "id": "displayName", "value": "Taux de panne" }] },
           { "matcher": { "id": "byName", "options": "age_machine_jours" }, "properties": [{ "id": "unit", "value": "jours" }] }
         ]
       }
@@ -71,7 +71,7 @@
             "method": "POST",
             "body_type": "raw",
             "body_content_type": "application/json",
-            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) / (($__to - $__from)/1000.0) * 100 AS downtime_pct FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine\"}",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) / (($__to - $__from)/1000.0) * 100 AS temps_arret_pct FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine\"}",
             "headers": [{ "key": "Accept", "value": "application/json" }]
           },
           "root_selector": "",
@@ -88,12 +88,12 @@
       "transformations": [
         { "id": "joinByField", "options": { "byField": "id_machine", "mode": "outer" } },
         { "id": "sortBy", "options": { "fields": {}, "sort": [{ "field": "age_machine_jours", "desc": true }] } },
-        { "id": "filterFieldsByName", "options": { "include": { "names": ["id_machine", "downtime_pct", "age_machine_jours"] } } }
+        { "id": "filterFieldsByName", "options": { "include": { "names": ["id_machine", "temps_arret_pct", "age_machine_jours"] } } }
       ],
       "fieldConfig": {
         "defaults": { "custom": { "axisPlacement": "left" } },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "downtime_pct" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "decimals", "value": 2 }, { "id": "custom.axisPlacement", "value": "left" }, { "id": "displayName", "value": "Taux de panne" }] },
+          { "matcher": { "id": "byName", "options": "temps_arret_pct" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "decimals", "value": 2 }, { "id": "custom.axisPlacement", "value": "left" }, { "id": "displayName", "value": "Taux de panne" }] },
           { "matcher": { "id": "byName", "options": "age_machine_jours" }, "properties": [{ "id": "unit", "value": "jours" }, { "id": "custom.axisPlacement", "value": "right" }] }
         ]
       },

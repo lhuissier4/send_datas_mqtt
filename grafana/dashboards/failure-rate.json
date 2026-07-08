@@ -27,7 +27,7 @@
             "method": "POST",
             "body_type": "raw",
             "body_content_type": "application/json",
-            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) AS downtime_seconds, sum(fin_alerte/1000000000.0 - extract(epoch from time)) / (($__to - $__from)/1000.0) * 100 AS downtime_pct FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine ORDER BY downtime_pct DESC\"}",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) AS temps_arret_secondes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) / (($__to - $__from)/1000.0) * 100 AS temps_arret_pct FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine ORDER BY temps_arret_pct DESC\"}",
             "headers": [{ "key": "Accept", "value": "application/json" }]
           },
           "root_selector": "",
@@ -40,8 +40,8 @@
           "unit": "none"
         },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "downtime_pct" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "decimals", "value": 2 }, { "id": "displayName", "value": "Taux de panne" }] },
-          { "matcher": { "id": "byName", "options": "downtime_seconds" }, "properties": [{ "id": "unit", "value": "secondes" }] }
+          { "matcher": { "id": "byName", "options": "temps_arret_pct" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "decimals", "value": 2 }, { "id": "displayName", "value": "Taux de panne" }] },
+          { "matcher": { "id": "byName", "options": "temps_arret_secondes" }, "properties": [{ "id": "unit", "value": "secondes" }, { "id": "displayName", "value": "Temps d'arret" }] }
         ]
       }
     },
@@ -64,7 +64,7 @@
             "method": "POST",
             "body_type": "raw",
             "body_content_type": "application/json",
-            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) AS downtime_seconds FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine\"}",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) AS temps_arret_secondes FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine\"}",
             "headers": [{ "key": "Accept", "value": "application/json" }]
           },
           "root_selector": "",
@@ -86,7 +86,7 @@
             "fields": {
               "type_machine": { "operation": "groupby" },
               "nb_pannes": { "operation": "aggregate", "aggregations": ["sum"] },
-              "downtime_seconds": { "operation": "aggregate", "aggregations": ["sum"] }
+              "temps_arret_secondes": { "operation": "aggregate", "aggregations": ["sum"] }
             }
           }
         }
@@ -111,7 +111,7 @@
             "method": "POST",
             "body_type": "raw",
             "body_content_type": "application/json",
-            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) AS downtime_seconds, sum(fin_alerte/1000000000.0 - extract(epoch from time)) / (($__to - $__from)/1000.0) * 100 AS downtime_pct FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine ORDER BY downtime_pct DESC\"}",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) AS temps_arret_secondes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) / (($__to - $__from)/1000.0) * 100 AS temps_arret_pct FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine ORDER BY temps_arret_pct DESC\"}",
             "headers": [{ "key": "Accept", "value": "application/json" }]
           },
           "root_selector": "",
@@ -119,12 +119,12 @@
         }
       ],
       "transformations": [
-        { "id": "filterFieldsByName", "options": { "include": { "names": ["id_machine", "downtime_pct"] } } }
+        { "id": "filterFieldsByName", "options": { "include": { "names": ["id_machine", "temps_arret_pct"] } } }
       ],
       "fieldConfig": {
         "defaults": { "unit": "percent", "decimals": 2 },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "downtime_pct" }, "properties": [{ "id": "displayName", "value": "Taux de panne" }] }
+          { "matcher": { "id": "byName", "options": "temps_arret_pct" }, "properties": [{ "id": "displayName", "value": "Taux de panne" }] }
         ]
       },
       "options": {
@@ -153,7 +153,7 @@
             "method": "POST",
             "body_type": "raw",
             "body_content_type": "application/json",
-            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) AS downtime_seconds FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine\"}",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) AS temps_arret_secondes FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine\"}",
             "headers": [{ "key": "Accept", "value": "application/json" }]
           },
           "root_selector": "",
@@ -188,6 +188,187 @@
         "xTickLabelRotation": 0,
         "showValue": "auto",
         "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Taux de panne par type de machine et type de panne",
+      "description": "Taux de panne croise : type de machine (CNC, presse, robot...) x type de panne (label GMAO), sur la periode selectionnee. La cle de jointure combo_key (id_machine|id_alerte) est calculee des deux cotes (InfluxDB et Postgres) pour rester unique : jointer separement sur id_machine puis id_alerte casserait les donnees des qu'une machine ou un type de panne apparait plusieurs fois.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 40 },
+      "datasource": { "type": "datasource", "uid": "-- Mixed --" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine || '|' || id_alerte AS combo_key, count(*) AS nb_pannes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) AS temps_arret_secondes, sum(fin_alerte/1000000000.0 - extract(epoch from time)) / (($__to - $__from)/1000.0) * 100 AS temps_arret_pct FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine, id_alerte\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "postgres", "uid": "mspr2-postgres-business" },
+          "format": "table",
+          "rawSql": "SELECT m.id_machine || '|' || ta.id::text AS combo_key, tm.type_machine, ta.label_gmao FROM machine m CROSS JOIN type_alerte ta JOIN type_machine tm ON m.id_type_machine = tm.id",
+          "rawQuery": true
+        }
+      ],
+      "transformations": [
+        { "id": "joinByField", "options": { "byField": "combo_key", "mode": "outer" } },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "type_machine": { "operation": "groupby" },
+              "label_gmao": { "operation": "groupby" },
+              "nb_pannes": { "operation": "aggregate", "aggregations": ["sum"] },
+              "temps_arret_secondes": { "operation": "aggregate", "aggregations": ["sum"] },
+              "temps_arret_pct": { "operation": "aggregate", "aggregations": ["sum"] }
+            }
+          }
+        },
+        { "id": "sortBy", "options": { "fields": {}, "sort": [{ "field": "temps_arret_pct (sum)", "desc": true }] } }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "temps_arret_pct (sum)" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "decimals", "value": 2 }, { "id": "displayName", "value": "Taux de panne" }] },
+          { "matcher": { "id": "byName", "options": "temps_arret_secondes (sum)" }, "properties": [{ "id": "unit", "value": "secondes" }, { "id": "displayName", "value": "Temps d'arret" }] }
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Taux de panne par type de machine, secteur et type de panne",
+      "description": "Taux de panne croise : type de machine x secteur (affectation la plus recente, via machine_secteur_historique) x type de panne (label GMAO), sur la periode selectionnee.",
+      "gridPos": { "h": 11, "w": 24, "x": 0, "y": 50 },
+      "datasource": { "type": "datasource", "uid": "-- Mixed --" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine || '|' || id_alerte AS combo_key, sum(fin_alerte/1000000000.0 - extract(epoch from time)) / (($__to - $__from)/1000.0) * 100 AS temps_arret_pct FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine, id_alerte\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "postgres", "uid": "mspr2-postgres-business" },
+          "format": "table",
+          "rawSql": "SELECT m.id_machine || '|' || ta.id::text AS combo_key, tm.type_machine, sec.secteur, ta.label_gmao FROM machine m CROSS JOIN type_alerte ta JOIN type_machine tm ON m.id_type_machine = tm.id JOIN (SELECT DISTINCT ON (id_machine) id_machine, secteur FROM machine_secteur_historique ORDER BY id_machine, date_mise_en_service DESC) sec ON sec.id_machine = m.id_machine",
+          "rawQuery": true
+        }
+      ],
+      "transformations": [
+        { "id": "joinByField", "options": { "byField": "combo_key", "mode": "outer" } },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "temps_arret_pct": { "operation": "aggregate", "aggregations": ["sum"] },
+              "type_machine": { "operation": "groupby" },
+              "secteur": { "operation": "groupby" },
+              "label_gmao": { "operation": "groupby" }
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "temps_arret_pct (sum)": 0,
+              "type_machine": 1,
+              "secteur": 2,
+              "label_gmao": 3
+            }
+          }
+        },
+        { "id": "sortBy", "options": { "fields": {}, "sort": [{ "field": "temps_arret_pct (sum)", "desc": true }] } }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "temps_arret_pct (sum)" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "decimals", "value": 2 }, { "id": "displayName", "value": "Taux de panne" }] }
+        ]
+      }
+    },
+    {
+      "id": 7,
+      "type": "piechart",
+      "title": "Repartition des pannes par type de machine",
+      "description": "Part de chaque type de machine (CNC, presse, robot...) dans le nombre total de pannes, sur la periode selectionnee.",
+      "gridPos": { "h": 11, "w": 24, "x": 0, "y": 61 },
+      "datasource": { "type": "datasource", "uid": "-- Mixed --" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_pannes FROM alerte WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "postgres", "uid": "mspr2-postgres-business" },
+          "format": "table",
+          "rawSql": "SELECT m.id_machine, tm.type_machine FROM machine m JOIN type_machine tm ON m.id_type_machine = tm.id",
+          "rawQuery": true
+        }
+      ],
+      "transformations": [
+        { "id": "joinByField", "options": { "byField": "id_machine", "mode": "outer" } },
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "type_machine": { "operation": "groupby" },
+              "nb_pannes": { "operation": "aggregate", "aggregations": ["sum"] }
+            }
+          }
+        },
+        { "id": "sortBy", "options": { "fields": {}, "sort": [{ "field": "nb_pannes (sum)", "desc": true }] } }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "none" },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": true },
+        "pieType": "pie",
+        "displayLabels": ["percent", "name"],
+        "legend": { "displayMode": "list", "placement": "right", "values": ["value"] },
+        "tooltip": { "mode": "single", "sort": "none" }
       }
     }
   ]

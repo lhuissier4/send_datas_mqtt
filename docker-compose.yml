@@ -36,6 +36,7 @@ services:
         --data-dir /var/lib/influxdb3/data
         --admin-token-file /tmp/admin-token.json
         --disable-authz health,ping
+        --query-file-limit 20000
     ports:
       - "${INFLUXDB_LIVE_PORT:-8183}:8181"
     volumes:
@@ -195,8 +196,6 @@ services:
   # Dashboards taux de panne / maintenance / age machine. Deux datasources :
   # Postgres (native) et InfluxDB sensor_live via le plugin communautaire
   # Infinity (InfluxDB 3 Core n'a pas de Flight SQL/gRPC, donc pas de
-  # datasource InfluxDB officielle possible ici - cf.
-  # openspec/changes/add-grafana-monitoring-dashboard/design.md).
   mspr2-grafana:
     image: grafana/grafana-oss:11.4.0
     container_name: mspr2-grafana
