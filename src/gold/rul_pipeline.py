@@ -321,6 +321,13 @@ def construire_jeu_entrainement(df_feat: pd.DataFrame) -> dict:
     colonnes_exclues = [
         COLONNE_CIBLE,
         "timestamp",
+        # Horodatage d'ingestion InfluxDB brut (distinct de "timestamp"/
+        # sensor_timestamp, la donnee metier) : present dans tout parquet
+        # produit par Telegraf (cf. telegraf/telegraf.conf) ou par
+        # gold/split_cold_storage.py, et transmis tel quel par
+        # rul_data_assembly.py::pivot_sensor_readings_to_wide (colonne
+        # "constante" par tick). Jamais une feature exploitable.
+        "time",
         "type_censure_futur_audit",
         "event_observe",
     ] + COLONNES_FUITE

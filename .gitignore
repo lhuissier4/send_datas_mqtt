@@ -12,6 +12,7 @@ __marimo__
 mosquitto/data
 mosquitto/log
 bdd/parquet/*.parquet
+models/*.joblib
 **/__pycache__/*
 **/.ipynb_checkpoints
 
