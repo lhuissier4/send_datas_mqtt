@@ -1,0 +1,179 @@
+{
+  "uid": "mspr2-maintenance",
+  "title": "Maintenance",
+  "tags": ["mspr2", "maintenance"],
+  "timezone": "browser",
+  "editable": true,
+  "time": { "from": "now-1y", "to": "now" },
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Maintenance par machine",
+      "description": "Frequence et duree des episodes de maintenance par machine, sur la periode selectionnee.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_maintenances, sum(fin_panne/1000000000.0 - extract(epoch from time)) AS total_duration_seconds, avg(fin_panne/1000000000.0 - extract(epoch from time)) AS avg_duration_seconds FROM maintenance WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine ORDER BY nb_maintenances DESC\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "total_duration_seconds" }, "properties": [{ "id": "unit", "value": "secondes" }] },
+          { "matcher": { "id": "byName", "options": "avg_duration_seconds" }, "properties": [{ "id": "unit", "value": "secondes" }] }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Maintenance par type",
+      "description": "Meme donnee, agregee par type de maintenance (label GMAO) via la table Postgres type_maintenance.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+      "datasource": { "type": "datasource", "uid": "-- Mixed --" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT CAST(id_panne AS BIGINT) AS id_panne, count(*) AS nb_occurrences, sum(fin_panne/1000000000.0 - extract(epoch from time)) AS total_duration_seconds, avg(fin_panne/1000000000.0 - extract(epoch from time)) AS avg_duration_seconds FROM maintenance WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_panne\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "postgres", "uid": "mspr2-postgres-business" },
+          "format": "table",
+          "rawSql": "SELECT id AS id_panne, label_gmao FROM type_maintenance",
+          "rawQuery": true
+        }
+      ],
+      "transformations": [
+        { "id": "joinByField", "options": { "byField": "id_panne", "mode": "outer" } }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "total_duration_seconds" }, "properties": [{ "id": "unit", "value": "secondes" }] },
+          { "matcher": { "id": "byName", "options": "avg_duration_seconds" }, "properties": [{ "id": "unit", "value": "secondes" }] }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "type": "barchart",
+      "title": "Maintenance par machine (histogramme)",
+      "description": "Vue rapide du panel 'Maintenance par machine' : nombre d'episodes de maintenance par machine.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 20 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT id_machine, count(*) AS nb_maintenances, sum(fin_panne/1000000000.0 - extract(epoch from time)) AS total_duration_seconds, avg(fin_panne/1000000000.0 - extract(epoch from time)) AS avg_duration_seconds FROM maintenance WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_machine ORDER BY nb_maintenances DESC\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        }
+      ],
+      "transformations": [
+        { "id": "filterFieldsByName", "options": { "include": { "names": ["id_machine", "nb_maintenances"] } } }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "none" },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "xTickLabelRotation": 0,
+        "showValue": "auto",
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+    {
+      "id": 4,
+      "type": "barchart",
+      "title": "Maintenance par type (histogramme)",
+      "description": "Vue rapide du panel 'Maintenance par type' : nombre d'occurrences par type de maintenance (label GMAO).",
+      "gridPos": { "h": 11, "w": 24, "x": 0, "y": 29 },
+      "datasource": { "type": "datasource", "uid": "-- Mixed --" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT CAST(id_panne AS BIGINT) AS id_panne, count(*) AS nb_occurrences, sum(fin_panne/1000000000.0 - extract(epoch from time)) AS total_duration_seconds, avg(fin_panne/1000000000.0 - extract(epoch from time)) AS avg_duration_seconds FROM maintenance WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) GROUP BY id_panne\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "postgres", "uid": "mspr2-postgres-business" },
+          "format": "table",
+          "rawSql": "SELECT id AS id_panne, label_gmao FROM type_maintenance",
+          "rawQuery": true
+        }
+      ],
+      "transformations": [
+        { "id": "joinByField", "options": { "byField": "id_panne", "mode": "outer" } },
+        { "id": "filterFieldsByName", "options": { "include": { "names": ["label_gmao", "nb_occurrences"] } } }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "none" },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "auto",
+        "xTickLabelRotation": -45,
+        "xTickLabelSpacing": 0,
+        "showValue": "auto",
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    }
+  ]
+}

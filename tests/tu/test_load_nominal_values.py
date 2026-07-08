@@ -32,11 +32,11 @@ def test_chunk_to_lines_produces_expected_tags_fields_and_time() -> None:
     lines = chunk_to_lines(_chunk())
 
     assert lines == [
-        "nominale_values,machine_id=MCH-001,statut_nominal=OK,id_type_metal=1,"
-        "id_regime_cadence=2 vitesse_rotation_nominal=100.0,"
-        "courant_moteur_nominal=5.5,pression_hydraulique_nominal=3.2,"
-        "temp_base_moteur=40.0,facteur_cadence=1.0,temps_cycle_sec=12.5 "
-        "1780308000000000000"
+        "nominale_values,machine_id=MCH-001,statut_nominal=OK "
+        "vitesse_rotation_nominal=100.0,courant_moteur_nominal=5.5,"
+        "pression_hydraulique_nominal=3.2,temp_base_moteur=40.0,"
+        "id_type_metal=1,id_regime_cadence=2,facteur_cadence=1.0,"
+        "temps_cycle_sec=12.5 1780308000000000000"
     ]
 
 

@@ -40,12 +40,21 @@ NOMINAL_VALUES_CSV_PATH = os.getenv(
 NOMINAL_VALUES_CHUNK_SIZE = int(os.getenv("NOMINAL_VALUES_CHUNK_SIZE", "20000"))
 
 MEASUREMENT = "nominale_values"
-TAG_COLUMNS = ["machine_id", "statut_nominal", "id_type_metal", "id_regime_cadence"]
+# Seuls machine_id/statut_nominal sont des tags (cf. design.md de
+# migrate-nominal-values-influxdb) : id_type_metal/id_regime_cadence
+# changent frequemment au fil du CSV (trie par machine, pas par ces
+# colonnes), donc les inclure comme tags explose le nombre de series et
+# fragmente l'ecriture en trop de petits fichiers par serie (dedup fanout
+# ingerable a la lecture). Restent des champs normaux, toujours filtrables/
+# groupables en SQL.
+TAG_COLUMNS = ["machine_id", "statut_nominal"]
 FIELD_COLUMNS = [
     "vitesse_rotation_nominal",
     "courant_moteur_nominal",
     "pression_hydraulique_nominal",
     "temp_base_moteur",
+    "id_type_metal",
+    "id_regime_cadence",
     "facteur_cadence",
     "temps_cycle_sec",
 ]
@@ -128,6 +137,13 @@ def main() -> None:
         for chunk in reader:
             if not _running:
                 break
+            # temps_cycle_sec est NaN quand la machine n'a pas de cycle en
+            # cours (facteur_cadence=1.0, pas de production) : ces lignes ne
+            # peuvent pas produire un point line-protocol valide pour tous
+            # les champs, donc on les saute plutot que d'ecrire un NaN.
+            chunk = chunk.dropna(subset=FIELD_COLUMNS)
+            if chunk.empty:
+                continue
             lines = chunk_to_lines(chunk)
             write_batch(session, write_url, lines)
             rows_written += len(lines)

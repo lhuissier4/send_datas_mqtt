@@ -26,6 +26,41 @@ pour l'URL interne a utiliser a la place).
 Requetes HTTP de test (healthcheck, ecriture, requete SQL) : voir
 [`http/influxdb.http`](http/influxdb.http) et [`http/README.md`](http/README.md).
 
+## Dashboards Grafana
+
+`docker compose up -d` demarre aussi `mspr2-grafana`
+(`http://localhost:<GRAFANA_PORT>`, defaut 3000 ; identifiants
+`GRAFANA_ADMIN_USER`/`GRAFANA_ADMIN_PASSWORD`, defaut `admin`/`admin`,
+cf. `.env.example`). Deux datasources sont provisionnees automatiquement :
+Postgres (`business_mspr`) et InfluxDB `sensor_live` via le plugin
+communautaire Infinity (InfluxDB 3 Core n'ayant pas de Flight SQL/gRPC, la
+datasource InfluxDB officielle de Grafana ne peut pas s'y connecter — cf.
+`openspec/changes/add-grafana-monitoring-dashboard/design.md`).
+
+Trois dashboards sont charges au demarrage (dossier `grafana/dashboards/`) :
+- **Taux de panne** : nombre d'episodes d'alerte et taux de panne (temps en
+  alerte / duree de la fenetre selectionnee), par machine et par type de
+  machine.
+- **Maintenance** : frequence et duree des episodes de maintenance, par
+  machine et par type de maintenance (label GMAO).
+- **Age machine vs taux de panne** : age de chaque machine a cote de son
+  taux de panne, pour reperer une correlation age/fiabilite.
+
+**Calcul du "Taux de panne"** : pour chaque machine, sur la fenetre de
+temps selectionnee dans le dashboard (coin superieur droit),
+
+```
+taux de panne (%) = somme des durees des episodes d'alerte / duree de la fenetre * 100
+```
+
+Chaque episode d'alerte est une ligne de la table InfluxDB `alerte`
+(`time` = debut, `fin_alerte` = fin) ; sa duree est `fin_alerte - time`. On
+somme ces durees pour la machine, on divise par la duree totale de la
+fenetre selectionnee (`$__to - $__from`), et on multiplie par 100 — c'est
+donc la proportion du temps de la fenetre pendant laquelle la machine
+etait en alerte. Requete exacte : voir `grafana/dashboards/failure-rate.json`
+(champ `downtime_pct`).
+
 ## Scripts Python
 
 Chaque script est independant et se lance comme `mqtt_send.py`, avec sa
