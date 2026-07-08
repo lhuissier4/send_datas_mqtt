@@ -1,0 +1,179 @@
+{
+  "uid": "mspr2-rul-prediction",
+  "title": "Predictions RUL",
+  "tags": ["mspr2", "rul"],
+  "timezone": "browser",
+  "editable": true,
+  "time": { "from": "now-24h", "to": "now" },
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "RUL restante par machine (jours)",
+      "description": "Derniere estimation connue de duree de vie residuelle (RUL, mesure InfluxDB rul_prediction) par machine. Rouge sous 2 jours, orange sous 7 jours.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT * FROM (SELECT id_machine, rul_jours_estime, risque, ROW_NUMBER() OVER (PARTITION BY id_machine ORDER BY time DESC) AS rn FROM rul_prediction) WHERE rn = 1 ORDER BY rul_jours_estime\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        }
+      ],
+      "transformations": [
+        { "id": "filterFieldsByName", "options": { "include": { "names": ["id_machine", "rul_jours_estime"] } } }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "d",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 2 },
+              { "color": "green", "value": 7 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^rul_jours_estime$/", "values": true },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none"
+      }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Dernieres predictions (detail)",
+      "description": "id_machine, RUL estimee (jours) et score de risque, derniere prediction connue par machine.",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT * FROM (SELECT id_machine, time AS derniere_prediction, rul_jours_estime, risque, ROW_NUMBER() OVER (PARTITION BY id_machine ORDER BY time DESC) AS rn FROM rul_prediction) WHERE rn = 1 ORDER BY rul_jours_estime\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        }
+      ],
+      "transformations": [
+        { "id": "filterFieldsByName", "options": { "include": { "names": ["id_machine", "derniere_prediction", "rul_jours_estime", "risque"] } } }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "rul_jours_estime" }, "properties": [{ "id": "unit", "value": "d" }, { "id": "decimals", "value": 1 }, { "id": "displayName", "value": "RUL estimee" }] },
+          { "matcher": { "id": "byName", "options": "risque" }, "properties": [{ "id": "decimals", "value": 2 }] },
+          { "matcher": { "id": "byName", "options": "derniere_prediction" }, "properties": [{ "id": "unit", "value": "time: YYYY-MM-DD HH:mm:ss" }] }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Historique RUL estimee par machine",
+      "description": "Evolution de la RUL estimee (jours) sur la fenetre selectionnee, une serie par machine.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT time, id_machine, rul_jours_estime FROM rul_prediction WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) ORDER BY time\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        }
+      ],
+      "transformations": [
+        { "id": "partitionByValues", "options": { "fields": ["id_machine"], "keepFields": false, "naming": { "asLabels": true } } }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "d", "decimals": 1, "custom": { "drawStyle": "line", "spanNulls": true } },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Historique score de risque par machine",
+      "description": "Evolution du score de risque (predict du modele Cox) sur la fenetre selectionnee, une serie par machine.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 25 },
+      "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "yesoreyeram-infinity-datasource", "uid": "mspr2-influxdb-live-infinity" },
+          "type": "json",
+          "source": "url",
+          "format": "table",
+          "url": "http://mspr2-influxdb-live:8181/api/v3/query_sql",
+          "url_options": {
+            "method": "POST",
+            "body_type": "raw",
+            "body_content_type": "application/json",
+            "data": "{\"db\":\"sensor_live\",\"q\":\"SELECT time, id_machine, risque FROM rul_prediction WHERE time >= to_timestamp_millis($__from) AND time <= to_timestamp_millis($__to) ORDER BY time\"}",
+            "headers": [{ "key": "Accept", "value": "application/json" }]
+          },
+          "root_selector": "",
+          "columns": []
+        }
+      ],
+      "transformations": [
+        { "id": "partitionByValues", "options": { "fields": ["id_machine"], "keepFields": false, "naming": { "asLabels": true } } }
+      ],
+      "fieldConfig": {
+        "defaults": { "decimals": 2, "custom": { "drawStyle": "line", "spanNulls": true } },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      }
+    }
+  ]
+}
