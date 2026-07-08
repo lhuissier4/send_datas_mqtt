@@ -1,11 +1,23 @@
 import os
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 
 
+def ensure_gold_csv(csv_path: Path, build_fn: Callable[[], pd.DataFrame]) -> pd.DataFrame:
+    """
+    Retourne le contenu de `csv_path` s'il existe deja (aucun recalcul),
+    sinon appelle `build_fn()` - qui calcule le dataset ET l'ecrit sur
+    `csv_path` - et retourne son resultat. Sert a la fois d'auto-verification
+    (un script qui verifie son propre fichier de sortie avant de tourner) et
+    de declencheur de voisin (un script qui a besoin du csv d'un autre script
+    du pipeline gold l'appelle si ce csv n'existe pas encore).
+    """
+    if csv_path.exists():
+        return pd.read_csv(csv_path)
+    return build_fn()
 
 
 def get_dynamic_max_workers(group_count: int) -> int:
